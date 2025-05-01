@@ -57,47 +57,56 @@ const TextileApp = {
 
        // PDF Viewer Functionality (REVISED FOR DYNAMIC DROPDOWNS)
        async initPDFViewer() {
-        // --- Get Elements ---
-        const semesterSelect = document.getElementById('semester');
-        const classSelect = document.getElementById('class');
-        const teacherSelect = document.getElementById('teacher');
-        const chapterSelect = document.getElementById('chapter');
-        const pdfUrlInput = document.getElementById('pdf-url');
-        const uploadPdfButton = document.getElementById('upload-pdf');
-        const pdfList = document.getElementById('pdf-list');
-        const pdfViewer = document.getElementById('pdf-viewer');
-        const pdfViewerContainer = document.getElementById('pdf-viewer-container');
-        // Add Class/Teacher/Chapter buttons (still placeholders)
-        const addClassButton = document.getElementById('add-class');
-        const addTeacherButton = document.getElementById('add-teacher');
-        const addChapterButton = document.getElementById('add-chapter');
+       // --- Get Elements ---
+const semesterSelect = document.getElementById('semester');
+const classSelect = document.getElementById('class');
+const teacherSelect = document.getElementById('teacher');
+const chapterSelect = document.getElementById('chapter');
+const pdfUrlInput = document.getElementById('pdf-url');
+const uploadPdfButton = document.getElementById('upload-pdf');
+const pdfList = document.getElementById('pdf-list');
+const pdfViewer = document.getElementById('pdf-viewer');
+const pdfViewerContainer = document.getElementById('pdf-viewer-container');
+// Add Class/Teacher/Chapter buttons and inputs
+const addClassButton = document.getElementById('add-class');
+const addTeacherButton = document.getElementById('add-teacher');
+const addChapterButton = document.getElementById('add-chapter');
+const newClassInput = document.getElementById('new-class');
+const newTeacherInput = document.getElementById('new-teacher');
+const newChapterInput = document.getElementById('new-chapter');
 
+// --- Check Elements ---
+if (!semesterSelect || !classSelect || !teacherSelect || !chapterSelect || !pdfUrlInput || !uploadPdfButton || !pdfList || !pdfViewer || !pdfViewerContainer) {
+    return; // Exit if essential elements are missing
+}
 
-        // --- Check Elements ---
-        if (!semesterSelect || !classSelect || !teacherSelect || !chapterSelect || !pdfUrlInput || !uploadPdfButton || !pdfList || !pdfViewer || !pdfViewerContainer) {
-            return; // Exit if essential elements are missing
-        }
-        // Add placeholders for add category buttons
-        addClassButton?.addEventListener('click', () => alert('Add Class functionality requires backend API endpoint.'));
-        addTeacherButton?.addEventListener('click', () => alert('Add Teacher functionality requires backend API endpoint.'));
-        addChapterButton?.addEventListener('click', () => alert('Add Chapter functionality requires backend API endpoint.'));
+// --- Add Class Functionality ---
+addClassButton?.addEventListener('click', async () => {
+    const semester = semesterSelect.value;
+    const newClassName = newClassInput.value.trim();
+    if (!semester) { alert('Please select a semester first.'); return; }
+    if (!newClassName) { alert('Please enter a class name to add.'); return; }
 
+    try {
+        const response = await fetch(`${this.API_BASE_URL}/classes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ semester: parseInt(semester, 10), className: newClassName })
+        });
+         if (!response.ok && response.status !== 409) { // Allow 409 Conflict (already exists)
+            throw new Error(`Failed to add class: ${await response.text()}`);
+         }
+         const result = await response.json(); // Read body even for 200/409
 
-        // --- Helper to Populate a Select Dropdown ---
-        const populateDropdown = (selectElement, items, defaultOptionText = "Select Option") => {
-            selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`; // Clear and add default
-            if (items && items.length > 0) {
-                items.forEach(item => {
-                    if (item) { // Ensure item is not null/empty
-                         const option = document.createElement('option');
-                         option.value = item;
-                         option.textContent = item;
-                         selectElement.appendChild(option);
-                    }
-                });
-            }
-            selectElement.disabled = !items || items.length === 0; // Disable if no items
-        };
+         this.showNotification(result.message || `Class "${newClassName}" added for Semester ${semester}.`);
+         newClassInput.value = ''; // Clear input
+         // Refresh the class dropdown for the current semester
+         await fetchAndPopulateClasses();
+    } catch (error) {
+         console.error("Error adding class:", error);
+         this.showNotification(error.message, true);
+    }
+});
 
         // --- Fetch and Populate Classes ---
         const fetchAndPopulateClasses = async () => {

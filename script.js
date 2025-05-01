@@ -2,10 +2,7 @@
 
 // Main application module
 const TextileApp = {
-    // GitHub API configuration
-    GITHUB_TOKEN: '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ERE', // Replace with your GitHub Personal Access Token
-    GITHUB_REPO: 'deathseeker2304/KUET-TE-2k23-',
-    DATA_FILE_PATH: '/data/data.json',
+    API_BASE_URL: 'https://textile-backend-lxda.onrender.com', // <<< ADD THIS LINE (Temporarily for local testing)
 
     // Utility function for date formatting
     formatDate(date) {
@@ -34,42 +31,7 @@ const TextileApp = {
         return regex.test(url);
     },
 
-    // Fetch shared data from data.json
-    async fetchSharedData() {
-        try {
-            const response = await fetch(this.DATA_FILE_PATH, { cache: "no-cache" });
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('Error fetching shared data:', error);
-            return { pdfs: [], videos: [], tasks: [], calendarEvents: [] }; // Fallback to empty data
-        }
-    },
-
-    // Update shared data by triggering GitHub Action
-    async updateSharedData(newData) {
-        try {
-            // Always fetch latest before update to avoid overwrites
-            const currentData = await this.fetchSharedData();
-            // Merge newData into currentData (shallow merge for top-level keys)
-            const mergedData = { ...currentData, ...newData };
-            await fetch(`https://api.github.com/repos/${this.GITHUB_REPO}/dispatches`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${this.GITHUB_TOKEN}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                },
-                body: JSON.stringify({
-                    event_type: 'update-data',
-                    client_payload: { data: JSON.stringify(mergedData) }
-                })
-            });
-            this.showNotification("Update submitted. Please refresh the page in a few seconds to see changes.");
-            console.log('Data updated successfully');
-        } catch (error) {
-            console.error('Error updating shared data:', error);
-        }
-    },
+   
 
     // Notification helper
     showNotification(message) {

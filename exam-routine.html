@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Textile 2k23 - Exam Routine</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="header-container"></header>
+
+    <main>
+        <section id="exam-routine">
+            <h2>Exam Routine</h2>
+            <table id="exam-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Subject</th>
+                        <th>Time</th>
+                        <th>Room</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Exam data rows will be added here -->
+                </tbody>
+            </table>
+            <button id="add-exam">Add Exam</button>
+            <div id="exam-form" style="display:none;">
+                <label for="exam-date">Date:</label>
+                <input type="date" id="exam-date">
+                <label for="exam-subject">Subject:</label>
+                <input type="text" id="exam-subject">
+                <label for="exam-time">Time:</label>
+                <input type="time" id="exam-time">
+                <label for="exam-room">Room:</label>
+                <input type="text" id="exam-room">
+                <button id="save-exam">Save Exam</button>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2023 Textile 2k23</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

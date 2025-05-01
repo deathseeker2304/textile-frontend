@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Textile 2K23 - PDFs</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="header-container"></header>
+
+    <main>
+        <section id="pdf-section">
+            <h2>PDF Viewer (<a href="https://drive.google.com/" target="_blank">Google Drive</a>)</h2>
+            <div id="semester-selection">
+                <label for="semester">Semester:</label>
+                <select id="semester">
+                    <option value="">Select Semester</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                    <option value="3">Semester 3</option>
+                    <option value="4">Semester 4</option>
+                    <option value="5">Semester 5</option>
+                    <option value="6">Semester 6</option>
+                    <option value="7">Semester 7</option>
+                    <option value="8">Semester 8</option>
+                </select>
+            </div>
+
+            <div id="class-selection">
+                <label for="class">Class:</label>
+                <select id="class">
+                    <option value="">Select Class</option>
+                </select>
+                <label for="new-class">Add new class:</label>
+                <input type="text" id="new-class" placeholder="Enter new class">
+                <button id="add-class">Add Class</button>
+            </div>
+
+            <div id="teacher-selection">
+                <label for="teacher">Teacher:</label>
+                <select id="teacher">
+                    <option value="">Select Teacher</option>
+                </select>
+                <label for="new-teacher">Add new teacher:</label>
+                <input type="text" id="new-teacher" placeholder="Enter new teacher">
+                <button id="add-teacher">Add Teacher</button>
+            </div>
+
+            <div id="chapter-selection">
+                <label for="chapter">Chapter:</label>
+                <select id="chapter">
+                    <option value="">Select Chapter</option>
+                </select>
+                <label for="new-chapter">Add new chapter:</label>
+                <input type="text" id="new-chapter" placeholder="Enter new chapter">
+                <button id="add-chapter">Add Chapter</button>
+            </div>
+
+            <div id="pdf-upload">
+                <label for="pdf-url">Google Drive PDF URL:</label>
+                <input type="url" id="pdf-url" placeholder="Enter Google Drive PDF URL (e.g., https://drive.google.com/file/d/FILE_ID/view)">
+                <button id="upload-pdf">Upload PDF</button>
+            </div>
+
+            <div id="pdf-list" class="file-list"></div>
+            <div id="pdf-viewer-container">
+                <iframe id="pdf-viewer" style="display: none;"></iframe>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2025 Textile 2K23. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

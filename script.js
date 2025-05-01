@@ -277,156 +277,177 @@ const TextileApp = {
         // updateClassDropdown(); // This relied on old structure, remove or replace with API call if needed
     },
 
-    // Video Integration Functionality
-    async initVideoIntegration() {
-         const semesterSelect = document.getElementById('semester-video');
-         const classSelect = document.getElementById('class-video');
-         // ... (get all other video section elements) ...
-         const videoUrlInput = document.getElementById('video-url');
-         const addVideoButton = document.getElementById('add-video-button');
-         const videoList = document.getElementById('video-list');
-         const videoPlayer = document.getElementById('video-player');
-         const videoPlayerContainer = document.getElementById('video-player-container');
-
-         if (!semesterSelect || !classSelect /*... add checks for all other elements ...*/ || !videoList || !videoPlayer) {
-             // console.log("Video elements not found, skipping initVideoIntegration");
-             return;
-         }
-
-        const displayVideos = async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-
-            videoList.innerHTML = '';
-            if (videoPlayer) videoPlayer.style.display = 'none';
-
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
-                return;
+        // Video Integration Functionality
+        async initVideoIntegration() {
+            // --- GET ALL ELEMENTS ---
+            const semesterSelect = document.getElementById('semester-video');
+            const classSelect = document.getElementById('class-video');
+            const newClassInput = document.getElementById('new-class-video');
+            const addClassButton = document.getElementById('add-class-video');
+            const teacherSelect = document.getElementById('teacher-video');   // <<< NEEDED
+            const newTeacherInput = document.getElementById('new-teacher-video');
+            const addTeacherButton = document.getElementById('add-teacher-video');
+            const chapterSelect = document.getElementById('chapter-video');     // <<< NEEDED
+            const newChapterInput = document.getElementById('new-chapter-video');
+            const addChapterButton = document.getElementById('add-chapter-video');
+            const videoUrlInput = document.getElementById('video-url');
+            const addVideoButton = document.getElementById('add-video-button');
+            const videoList = document.getElementById('video-list');
+            const videoPlayer = document.getElementById('video-player');
+            const videoPlayerContainer = document.getElementById('video-player-container');
+    
+            // --- CHECK IF ALL ESSENTIAL ELEMENTS EXIST ---
+            if (!semesterSelect || !classSelect || /*!newClassInput || !addClassButton || */ // Optional checks
+                !teacherSelect || /*!newTeacherInput || !addTeacherButton ||*/              // ADDED CHECK
+                !chapterSelect || /*!newChapterInput || !addChapterButton ||*/              // ADDED CHECK
+                !videoUrlInput || !addVideoButton ||
+                !videoList || !videoPlayer || !videoPlayerContainer ) {                    // Added container
+                // console.log("Required video elements not found, skipping initVideoIntegration");
+                return; // Exit if any essential element is missing
             }
-
-            const queryParams = new URLSearchParams({
-                semester: semester,
-                class: selectedClass,
-                teacher: selectedTeacher,
-                chapter: selectedChapter
-            }).toString();
-
-            try {
-                const response = await fetch(`${this.API_BASE_URL}/videos?${queryParams}`);
-                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-                const videos = await response.json();
-
-                if (videos.length === 0) {
-                    videoList.innerHTML = '<li>No videos found for this selection.</li>';
+            // --- END OF CHECK ---
+    
+    
+            // --- HELPER FUNCTION TO DISPLAY VIDEOS ---
+            const displayVideos = async () => {
+                const semester = semesterSelect.value;
+                const selectedClass = classSelect.value;
+                // These lines should now work because the variables are declared and checked above
+                const selectedTeacher = teacherSelect.value;
+                const selectedChapter = chapterSelect.value;
+    
+                videoList.innerHTML = '';
+                if (videoPlayer) videoPlayer.style.display = 'none';
+    
+                // Only fetch if all dropdowns have a selection
+                if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
                     return;
                 }
-
-                videos.forEach(video => {
-                    const videoItem = document.createElement('div');
-                    videoItem.className = 'video-item';
-                    // Assuming video object from API has 'id' and 'video_id' (YouTube ID)
-                    videoItem.innerHTML = `
-                        <i class="fas fa-video" style="margin-right: 5px; color: #1976D2;"></i>
-                        <span>Video ${video.video_id}</span>
-                        <button class="delete-video" data-id="${video.id}" style="margin-left: auto; background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Del</button>
-                    `;
-
-                    // Click to play video
-                    videoItem.addEventListener('click', (e) => {
-                        if (!e.target.classList.contains('delete-video')) {
-                            videoPlayer.src = `https://www.youtube.com/embed/${video.video_id}`;
-                            videoPlayer.style.display = 'block';
-                            videoPlayerContainer?.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    });
-
-                    // Delete video button
-                    videoItem.querySelector('.delete-video').addEventListener('click', async (e) => {
-                        e.stopPropagation(); // Prevent triggering the play click
-                        const videoEntryId = video.id;
-                        if (confirm(`Are you sure you want to delete video ${video.video_id}?`)) {
-                            try {
-                                const deleteResponse = await fetch(`${this.API_BASE_URL}/videos/${videoEntryId}`, { method: 'DELETE' });
-                                if (!deleteResponse.ok) throw new Error('Failed to delete video');
-                                videoItem.remove();
-                                this.showNotification('Video deleted.');
-                            } catch (error) {
-                                console.error('Error deleting video:', error);
-                                this.showNotification('Failed to delete video.', true);
+    
+                const queryParams = new URLSearchParams({
+                    semester: semester,
+                    class: selectedClass,
+                    teacher: selectedTeacher,
+                    chapter: selectedChapter
+                }).toString();
+    
+                try {
+                    const response = await fetch(`${this.API_BASE_URL}/videos?${queryParams}`);
+                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    const videos = await response.json();
+    
+                    if (videos.length === 0) {
+                        videoList.innerHTML = '<li>No videos found for this selection.</li>';
+                        return;
+                    }
+    
+                    videos.forEach(video => {
+                        const videoItem = document.createElement('div');
+                        videoItem.className = 'video-item';
+                        videoItem.innerHTML = `
+                            <i class="fas fa-video" style="margin-right: 5px; color: #1976D2;"></i>
+                            <span>Video ${video.video_id}</span>
+                            <button class="delete-video" data-id="${video.id}" style="margin-left: auto; background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Del</button>
+                        `;
+    
+                        // Click to play video
+                        videoItem.addEventListener('click', (e) => {
+                            if (!e.target.classList.contains('delete-video')) {
+                                videoPlayer.src = `https://www.youtube.com/embed/${video.video_id}`;
+                                videoPlayer.style.display = 'block';
+                                videoPlayerContainer?.scrollIntoView({ behavior: 'smooth' });
                             }
-                        }
+                        });
+    
+                        // Delete video button
+                        videoItem.querySelector('.delete-video').addEventListener('click', async (e) => {
+                            e.stopPropagation(); // Prevent triggering the play click
+                            const videoEntryId = video.id;
+                            if (confirm(`Are you sure you want to delete video ${video.video_id}?`)) {
+                                try {
+                                    const deleteResponse = await fetch(`${this.API_BASE_URL}/videos/${videoEntryId}`, { method: 'DELETE' });
+                                    if (!deleteResponse.ok) throw new Error('Failed to delete video');
+                                    videoItem.remove();
+                                    this.showNotification('Video deleted.');
+                                } catch (error) {
+                                    console.error('Error deleting video:', error);
+                                    this.showNotification('Failed to delete video.', true);
+                                }
+                            }
+                        });
+                        videoList.appendChild(videoItem);
                     });
-                    videoList.appendChild(videoItem);
-                });
-
-            } catch (error) {
-                console.error('Error displaying videos:', error);
-                videoList.innerHTML = '<li>Error loading videos. Please try again.</li>';
-                this.showNotification(`Failed to load videos: ${error.message}`, true);
-            }
-        };
-
-        // Add event listeners to dropdowns
-        semesterSelect.addEventListener('change', displayVideos);
-        classSelect.addEventListener('change', displayVideos);
-        teacherSelect.addEventListener('change', displayVideos);
-        chapterSelect.addEventListener('change', displayVideos);
-
-        // --- Placeholder Add Functionality ---
-        document.getElementById('add-class-video')?.addEventListener('click', () => alert('Add Class requires backend API.'));
-        document.getElementById('add-teacher-video')?.addEventListener('click', () => alert('Add Teacher requires backend API.'));
-        document.getElementById('add-chapter-video')?.addEventListener('click', () => alert('Add Chapter requires backend API.'));
-
-        // Add Video button
-        addVideoButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const videoUrl = videoUrlInput.value.trim();
-
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !videoUrl) {
-                alert('Please select all fields and enter a YouTube Video URL.');
-                return;
-            }
-            if (!this.validateYouTubeUrl(videoUrl)) {
-                alert('Please enter a valid YouTube Video URL (e.g., https://youtu.be/VIDEO_ID or full URL).');
-                return;
-            }
-
-            const videoIdMatch = videoUrl.match(/(?:v=|v\/|embed\/|youtu\.be\/|\/user\/[^#]*#([^\/]*?\/)*?p\/a\/u\/\d+\/|(?<=watch\?v=))([^"&?\/\s]{11})/);
-            if (!videoIdMatch || !videoIdMatch[2]){
-                 alert('Could not extract Video ID from URL.');
-                 return;
-            }
-            const videoId = videoIdMatch[2];
-
-            const videoData = {
-                videoId: videoId,
-                semester: parseInt(semester, 10),
-                className: selectedClass,
-                teacherName: selectedTeacher,
-                chapterName: selectedChapter
-            };
-
-            try {
-                const response = await fetch(`${this.API_BASE_URL}/videos`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(videoData)
-                });
-                if (!response.ok) throw new Error(`Failed to add video: ${await response.text()}`);
-                this.showNotification('Video added.');
-                videoUrlInput.value = '';
-                await displayVideos(); // Refresh list
-            } catch (error) {
-                console.error('Error adding video:', error);
-                this.showNotification(`Failed to add video: ${error.message}`, true);
-            }
-        });
-    },
+    
+                } catch (error) {
+                    console.error('Error displaying videos:', error);
+                    videoList.innerHTML = '<li>Error loading videos. Please try again.</li>';
+                    this.showNotification(`Failed to load videos: ${error.message}`, true);
+                }
+            }; // --- END OF displayVideos ---
+    
+    
+            // --- ADD EVENT LISTENERS ---
+            // These should now work correctly
+            semesterSelect.addEventListener('change', displayVideos);
+            classSelect.addEventListener('change', displayVideos);
+            teacherSelect.addEventListener('change', displayVideos);
+            chapterSelect.addEventListener('change', displayVideos);
+    
+            // --- Placeholder Add Functionality ---
+            addClassButton?.addEventListener('click', () => alert('Add Class requires backend API.'));
+            addTeacherButton?.addEventListener('click', () => alert('Add Teacher requires backend API.'));
+            addChapterButton?.addEventListener('click', () => alert('Add Chapter requires backend API.'));
+            // Using optional chaining (?.) in case these buttons don't exist
+    
+            // Add Video button Handler
+            addVideoButton.addEventListener('click', async () => {
+                const semester = semesterSelect.value;
+                const selectedClass = classSelect.value;
+                const selectedTeacher = teacherSelect.value; // Uses variable declared above
+                const selectedChapter = chapterSelect.value; // Uses variable declared above
+                const videoUrl = videoUrlInput.value.trim();
+    
+                if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !videoUrl) {
+                    alert('Please select all fields and enter a YouTube Video URL.');
+                    return;
+                }
+                if (!this.validateYouTubeUrl(videoUrl)) {
+                    alert('Please enter a valid YouTube Video URL (e.g., https://youtu.be/VIDEO_ID or full URL).');
+                    return;
+                }
+    
+                const videoIdMatch = videoUrl.match(/(?:v=|v\/|embed\/|youtu\.be\/|\/user\/[^#]*#([^\/]*?\/)*?p\/a\/u\/\d+\/|(?<=watch\?v=))([^"&?\/\s]{11})/);
+                if (!videoIdMatch || !videoIdMatch[2]){
+                     alert('Could not extract Video ID from URL.');
+                     return;
+                }
+                const videoId = videoIdMatch[2];
+    
+                const videoData = {
+                    videoId: videoId,
+                    semester: parseInt(semester, 10),
+                    className: selectedClass,
+                    teacherName: selectedTeacher,
+                    chapterName: selectedChapter
+                };
+    
+                try {
+                    const response = await fetch(`${this.API_BASE_URL}/videos`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(videoData)
+                    });
+                    if (!response.ok) throw new Error(`Failed to add video: ${await response.text()}`);
+                    this.showNotification('Video added.');
+                    videoUrlInput.value = '';
+                    await displayVideos(); // Refresh list
+                } catch (error) {
+                    console.error('Error adding video:', error);
+                    this.showNotification(`Failed to add video: ${error.message}`, true);
+                }
+            }); // --- END OF Add Video Button Handler ---
+    
+        }, // --- END OF initVideoIntegration ---
 
     // Notes Functionality
     async initNotes() {

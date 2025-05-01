@@ -97,11 +97,16 @@ const populateDropdown = (selectElement, items, defaultOptionText = "Select Opti
     selectElement.disabled = !items || items.length === 0;
 };
 
-// --- Fetch and Populate Classes ---
-const fetchAndPopulateClasses = async () => {
-    // ...uses populateDropdown...
-};
+        // --- Fetch and Populate Classes ---
+        const fetchAndPopulateClasses = async () => {
+            // --- ADD DEBUG LOG AT THE START ---
+            console.log("fetchAndPopulateClasses STARTING..."); // <<< ADD THIS LINE (Log 3)
+            // --- END OF ADDITION ---
 
+            const semester = semesterSelect.value;
+            populateDropdown(classSelect, [], "Select Class"); // Clear/disable children
+            // ... (rest of fetchAndPopulateClasses) ...
+        };
 // --- Fetch and Populate Teachers ---
 const fetchAndPopulateTeachers = async () => {
     // ...uses populateDropdown...
@@ -224,15 +229,24 @@ addClassButton?.addEventListener('click', async () => {
             }
         }; // --- END of displayPdfs ---
 
+  // --- Event Listeners for Dropdowns ---
 
-        // --- Event Listeners for Dropdowns ---
-        semesterSelect.addEventListener('change', fetchAndPopulateClasses);
+        // --- ADD DEBUG LOG BEFORE LISTENER ---
+        console.log("Adding event listener to semesterSelect:", semesterSelect); // <<< ADD THIS LINE (Log 1)
+
+        // --- MODIFY THE LISTENER ITSELF ---
+        semesterSelect.addEventListener('change', () => { // <<< Wrap in arrow function
+            console.log("Semester CHANGED! Value:", semesterSelect.value); // <<< ADD THIS LINE (Log 2)
+            fetchAndPopulateClasses(); // Keep the original call inside
+        });
+        // --- END OF MODIFICATION ---
+
         classSelect.addEventListener('change', fetchAndPopulateTeachers);
         teacherSelect.addEventListener('change', fetchAndPopulateChapters);
         chapterSelect.addEventListener('change', displayPdfs); // Only display PDFs when chapter is selected
 
 
-        // --- Upload PDF Button Handler (Mostly same as before) ---
+        // --- Upload PDF Button Handler (Mostly same as before) --
         uploadPdfButton.addEventListener('click', async () => {
             const semester = semesterSelect.value; const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value; const selectedChapter = chapterSelect.value;

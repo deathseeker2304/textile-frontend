@@ -92,6 +92,8 @@ const populateDropdown = (selectElement, items, defaultOptionText = "Select Opti
             }
         });
     }
+    // Debug log for troubleshooting
+    console.log(`Populating ${selectElement.id}: Items=`, items, `Length=`, items?.length);
     selectElement.disabled = !items || items.length === 0;
 };
 

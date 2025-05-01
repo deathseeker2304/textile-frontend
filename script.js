@@ -144,7 +144,6 @@ const TextileApp = {
             if (!semester || !selectedClass) {
                 teacherSelect.disabled = true;
                 chapterSelect.disabled = true;
-                this.showNotification("Please select both semester and class to load teachers.", true);
                 return;
             }
         
@@ -165,7 +164,7 @@ const TextileApp = {
                     return;
                 }
                 populateDropdown(teacherSelect, teachers, "Select Teacher");
-                teacherSelect.disabled = false;
+                teacherSelect.disabled = false; // Always enable if teachers exist
                 chapterSelect.disabled = true;
             } catch (error) {
                 console.error("Error fetching teachers:", error.message);

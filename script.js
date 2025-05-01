@@ -137,13 +137,14 @@ const TextileApp = {
             const selectedClass = classSelect.value;
             populateDropdown(teacherSelect, [], "Select Teacher");
             populateDropdown(chapterSelect, [], "Select Chapter");
-            pdfList.innerHTML = ''; // Adjust this line for videos.html (videoList) and notes.html (notesList)
-            pdfViewer.src = 'about:blank'; // Adjust for videos.html (videoPlayer) and notes.html (notesViewer)
-            pdfViewer.style.display = 'none'; // Adjust as above
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
         
             if (!semester || !selectedClass) {
                 teacherSelect.disabled = true;
                 chapterSelect.disabled = true;
+                this.showNotification("Please select both semester and class to load teachers.", true);
                 return;
             }
         
@@ -154,11 +155,18 @@ const TextileApp = {
                     throw new Error(`Failed to fetch teachers: ${response.status} ${await response.text()}`);
                 }
                 const teachers = await response.json();
-                if (!Array.isArray(teachers) || teachers.length === 0) {
-                    throw new Error("No teachers found for the selected class and semester.");
+                if (!Array.isArray(teachers)) {
+                    throw new Error("Invalid response format: Teachers data is not an array.");
+                }
+                if (teachers.length === 0) {
+                    this.showNotification("No teachers found for the selected class and semester. Please add a teacher.", true);
+                    teacherSelect.disabled = true;
+                    chapterSelect.disabled = true;
+                    return;
                 }
                 populateDropdown(teacherSelect, teachers, "Select Teacher");
                 teacherSelect.disabled = false;
+                chapterSelect.disabled = true;
             } catch (error) {
                 console.error("Error fetching teachers:", error.message);
                 this.showNotification(`Failed to load teachers: ${error.message}`, true);
@@ -166,17 +174,19 @@ const TextileApp = {
                 chapterSelect.disabled = true;
             }
         };
+        
         const fetchAndPopulateChapters = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             populateDropdown(chapterSelect, [], "Select Chapter");
-            pdfList.innerHTML = ''; // Adjust this line for videos.html (videoList) and notes.html (notesList)
-            pdfViewer.src = 'about:blank'; // Adjust for videos.html (videoPlayer) and notes.html (notesViewer)
-            pdfViewer.style.display = 'none'; // Adjust as above
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
         
             if (!semester || !selectedClass || !selectedTeacher) {
                 chapterSelect.disabled = true;
+                this.showNotification("Please select semester, class, and teacher to load chapters.", true);
                 return;
             }
         
@@ -187,8 +197,13 @@ const TextileApp = {
                     throw new Error(`Failed to fetch chapters: ${response.status} ${await response.text()}`);
                 }
                 const chapters = await response.json();
-                if (!Array.isArray(chapters) || chapters.length === 0) {
-                    throw new Error("No chapters found for the selected class, teacher, and semester.");
+                if (!Array.isArray(chapters)) {
+                    throw new Error("Invalid response format: Chapters data is not an array.");
+                }
+                if (chapters.length === 0) {
+                    this.showNotification("No chapters found for the selected teacher, class, and semester. Please add a chapter.", true);
+                    chapterSelect.disabled = true;
+                    return;
                 }
                 populateDropdown(chapterSelect, chapters, "Select Chapter");
                 chapterSelect.disabled = false;
@@ -522,61 +537,87 @@ const TextileApp = {
             }
         };
 
-        // Fetch and Populate Teachers
         const fetchAndPopulateTeachers = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             populateDropdown(teacherSelect, [], "Select Teacher");
             populateDropdown(chapterSelect, [], "Select Chapter");
-            videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
+        
             if (!semester || !selectedClass) {
                 teacherSelect.disabled = true;
                 chapterSelect.disabled = true;
+                this.showNotification("Please select both semester and class to load teachers.", true);
                 return;
             }
-
+        
             try {
                 const queryParams = new URLSearchParams({ semester, class: selectedClass }).toString();
                 const response = await fetch(`${this.API_BASE_URL}/teachers?${queryParams}`);
-                if (!response.ok) throw new Error(`Failed to fetch teachers: ${await response.text()}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch teachers: ${response.status} ${await response.text()}`);
+                }
                 const teachers = await response.json();
+                if (!Array.isArray(teachers)) {
+                    throw new Error("Invalid response format: Teachers data is not an array.");
+                }
+                if (teachers.length === 0) {
+                    this.showNotification("No teachers found for the selected class and semester. Please add a teacher.", true);
+                    teacherSelect.disabled = true;
+                    chapterSelect.disabled = true;
+                    return;
+                }
                 populateDropdown(teacherSelect, teachers, "Select Teacher");
+                teacherSelect.disabled = false;
+                chapterSelect.disabled = true;
             } catch (error) {
-                console.error("Error fetching teachers:", error);
-                this.showNotification("Failed to load teachers.", true);
+                console.error("Error fetching teachers:", error.message);
+                this.showNotification(`Failed to load teachers: ${error.message}`, true);
                 teacherSelect.disabled = true;
+                chapterSelect.disabled = true;
             }
         };
-
-        // Fetch and Populate Chapters
+        
         const fetchAndPopulateChapters = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             populateDropdown(chapterSelect, [], "Select Chapter");
-            videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
+        
             if (!semester || !selectedClass || !selectedTeacher) {
                 chapterSelect.disabled = true;
+                this.showNotification("Please select semester, class, and teacher to load chapters.", true);
                 return;
             }
-
+        
             try {
                 const queryParams = new URLSearchParams({ semester, class: selectedClass, teacher: selectedTeacher }).toString();
                 const response = await fetch(`${this.API_BASE_URL}/chapters?${queryParams}`);
-                if (!response.ok) throw new Error(`Failed to fetch chapters: ${await response.text()}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch chapters: ${response.status} ${await response.text()}`);
+                }
                 const chapters = await response.json();
+                if (!Array.isArray(chapters)) {
+                    throw new Error("Invalid response format: Chapters data is not an array.");
+                }
+                if (chapters.length === 0) {
+                    this.showNotification("No chapters found for the selected teacher, class, and semester. Please add a chapter.", true);
+                    chapterSelect.disabled = true;
+                    return;
+                }
                 populateDropdown(chapterSelect, chapters, "Select Chapter");
+                chapterSelect.disabled = false;
             } catch (error) {
-                console.error("Error fetching chapters:", error);
-                this.showNotification("Failed to load chapters.", true);
+                console.error("Error fetching chapters:", error.message);
+                this.showNotification(`Failed to load chapters: ${error.message}`, true);
                 chapterSelect.disabled = true;
             }
         };
-
         // Add Class Functionality
         addClassButton?.addEventListener('click', async () => {
             const semester = semesterSelect.value;
@@ -886,69 +927,87 @@ const TextileApp = {
             }
         };
 
-        // Fetch and Populate Teachers
         const fetchAndPopulateTeachers = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             populateDropdown(teacherSelect, [], "Select Teacher");
             populateDropdown(chapterSelect, [], "Select Chapter");
-            populateDropdown(studentNameSelect, [], "Select Student");
-            populateDropdown(rollSelect, [], "Select Roll");
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
+        
             if (!semester || !selectedClass) {
                 teacherSelect.disabled = true;
                 chapterSelect.disabled = true;
-                studentNameSelect.disabled = true;
-                rollSelect.disabled = true;
+                this.showNotification("Please select both semester and class to load teachers.", true);
                 return;
             }
-
+        
             try {
                 const queryParams = new URLSearchParams({ semester, class: selectedClass }).toString();
                 const response = await fetch(`${this.API_BASE_URL}/teachers?${queryParams}`);
-                if (!response.ok) throw new Error(`Failed to fetch teachers: ${await response.text()}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch teachers: ${response.status} ${await response.text()}`);
+                }
                 const teachers = await response.json();
+                if (!Array.isArray(teachers)) {
+                    throw new Error("Invalid response format: Teachers data is not an array.");
+                }
+                if (teachers.length === 0) {
+                    this.showNotification("No teachers found for the selected class and semester. Please add a teacher.", true);
+                    teacherSelect.disabled = true;
+                    chapterSelect.disabled = true;
+                    return;
+                }
                 populateDropdown(teacherSelect, teachers, "Select Teacher");
+                teacherSelect.disabled = false;
+                chapterSelect.disabled = true;
             } catch (error) {
-                console.error("Error fetching teachers:", error);
-                this.showNotification("Failed to load teachers.", true);
+                console.error("Error fetching teachers:", error.message);
+                this.showNotification(`Failed to load teachers: ${error.message}`, true);
                 teacherSelect.disabled = true;
+                chapterSelect.disabled = true;
             }
         };
-
-        // Fetch and Populate Chapters
+        
         const fetchAndPopulateChapters = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             populateDropdown(chapterSelect, [], "Select Chapter");
-            populateDropdown(studentNameSelect, [], "Select Student");
-            populateDropdown(rollSelect, [], "Select Roll");
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-
+            pdfList.innerHTML = '';
+            pdfViewer.src = 'about:blank';
+            pdfViewer.style.display = 'none';
+        
             if (!semester || !selectedClass || !selectedTeacher) {
                 chapterSelect.disabled = true;
-                studentNameSelect.disabled = true;
-                rollSelect.disabled = true;
+                this.showNotification("Please select semester, class, and teacher to load chapters.", true);
                 return;
             }
-
+        
             try {
                 const queryParams = new URLSearchParams({ semester, class: selectedClass, teacher: selectedTeacher }).toString();
                 const response = await fetch(`${this.API_BASE_URL}/chapters?${queryParams}`);
-                if (!response.ok) throw new Error(`Failed to fetch chapters: ${await response.text()}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch chapters: ${response.status} ${await response.text()}`);
+                }
                 const chapters = await response.json();
+                if (!Array.isArray(chapters)) {
+                    throw new Error("Invalid response format: Chapters data is not an array.");
+                }
+                if (chapters.length === 0) {
+                    this.showNotification("No chapters found for the selected teacher, class, and semester. Please add a chapter.", true);
+                    chapterSelect.disabled = true;
+                    return;
+                }
                 populateDropdown(chapterSelect, chapters, "Select Chapter");
+                chapterSelect.disabled = false;
             } catch (error) {
-                console.error("Error fetching chapters:", error);
-                this.showNotification("Failed to load chapters.", true);
+                console.error("Error fetching chapters:", error.message);
+                this.showNotification(`Failed to load chapters: ${error.message}`, true);
                 chapterSelect.disabled = true;
             }
         };
-
         // Fetch and Populate Students (Dummy for now)
         const fetchAndPopulateStudents = async () => {
             const semester = semesterSelect.value;

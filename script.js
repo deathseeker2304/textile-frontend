@@ -79,6 +79,36 @@ const newChapterInput = document.getElementById('new-chapter');
 if (!semesterSelect || !classSelect || !teacherSelect || !chapterSelect || !pdfUrlInput || !uploadPdfButton || !pdfList || !pdfViewer || !pdfViewerContainer) {
     return; // Exit if essential elements are missing
 }
+// --- Helper to Populate a Select Dropdown ---  <<<<<<< PASTE HERE
+const populateDropdown = (selectElement, items, defaultOptionText = "Select Option") => {
+    selectElement.innerHTML = `<option value="">${defaultOptionText}</option>`;
+    if (items && items.length > 0) {
+        items.forEach(item => {
+            if (item) {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                selectElement.appendChild(option);
+            }
+        });
+    }
+    selectElement.disabled = !items || items.length === 0;
+};
+
+// --- Fetch and Populate Classes ---
+const fetchAndPopulateClasses = async () => {
+    // ...uses populateDropdown...
+};
+
+// --- Fetch and Populate Teachers ---
+const fetchAndPopulateTeachers = async () => {
+    // ...uses populateDropdown...
+};
+
+// --- Fetch and Populate Chapters ---
+const fetchAndPopulateChapters = async () => {
+    // ...uses populateDropdown...
+};
 
 // --- Add Class Functionality ---
 addClassButton?.addEventListener('click', async () => {
@@ -107,76 +137,7 @@ addClassButton?.addEventListener('click', async () => {
          this.showNotification(error.message, true);
     }
 });
-
-        // --- Fetch and Populate Classes ---
-        const fetchAndPopulateClasses = async () => {
-            const semester = semesterSelect.value;
-            populateDropdown(classSelect, [], "Select Class"); // Clear/disable children
-            populateDropdown(teacherSelect, [], "Select Teacher");
-            populateDropdown(chapterSelect, [], "Select Chapter");
-            pdfList.innerHTML = ''; // Clear PDF list
-
-            if (!semester) return; // Don't fetch if no semester selected
-
-            try {
-                const response = await fetch(`${this.API_BASE_URL}/classes?semester=${semester}`);
-                if (!response.ok) throw new Error(`Failed to load classes: ${await response.text()}`);
-                const classes = await response.json();
-                populateDropdown(classSelect, classes, "Select Class");
-            } catch (error) {
-                console.error("Error fetching classes:", error);
-                this.showNotification(error.message, true);
-                populateDropdown(classSelect, [], "Error loading classes");
-            }
-        };
-
-        // --- Fetch and Populate Teachers ---
-        const fetchAndPopulateTeachers = async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            populateDropdown(teacherSelect, [], "Select Teacher"); // Clear/disable children
-            populateDropdown(chapterSelect, [], "Select Chapter");
-            pdfList.innerHTML = ''; // Clear PDF list
-
-            if (!semester || !selectedClass) return;
-
-            try {
-                const queryParams = new URLSearchParams({ semester, class: selectedClass }).toString();
-                const response = await fetch(`${this.API_BASE_URL}/teachers?${queryParams}`);
-                if (!response.ok) throw new Error(`Failed to load teachers: ${await response.text()}`);
-                const teachers = await response.json();
-                populateDropdown(teacherSelect, teachers, "Select Teacher");
-            } catch (error) {
-                console.error("Error fetching teachers:", error);
-                this.showNotification(error.message, true);
-                 populateDropdown(teacherSelect, [], "Error loading teachers");
-            }
-        };
-
-        // --- Fetch and Populate Chapters ---
-        const fetchAndPopulateChapters = async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            populateDropdown(chapterSelect, [], "Select Chapter"); // Clear/disable children
-            pdfList.innerHTML = ''; // Clear PDF list
-
-            if (!semester || !selectedClass || !selectedTeacher) return;
-
-             try {
-                const queryParams = new URLSearchParams({ semester, class: selectedClass, teacher: selectedTeacher }).toString();
-                const response = await fetch(`${this.API_BASE_URL}/chapters?${queryParams}`);
-                 if (!response.ok) throw new Error(`Failed to load chapters: ${await response.text()}`);
-                 const chapters = await response.json();
-                 populateDropdown(chapterSelect, chapters, "Select Chapter");
-            } catch (error) {
-                console.error("Error fetching chapters:", error);
-                this.showNotification(error.message, true);
-                 populateDropdown(chapterSelect, [], "Error loading chapters");
-            }
-        };
-
-        // --- Fetch and Display PDFs (Same as before, just called differently) ---
+    // --- Fetch and Display PDFs (Same as before, just called differently) ---
         const displayPdfs = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;

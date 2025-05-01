@@ -2,14 +2,22 @@
 
 // Main application module
 const TextileApp = {
-    API_BASE_URL: 'https://textile-backend-lxda.onrender.com', // <<< ADD THIS LINE (Temporarily for local testing)
+    API_BASE_URL: 'https://textile-backend-lxda.onrender.com/api', // <<< YOUR DEPLOYED BACKEND URL + /api
 
     // Utility function for date formatting
     formatDate(date) {
-        return new Date(date).toLocaleDateString('en-US', {
+        // Ensure date is valid before formatting
+        const d = new Date(date);
+        if (isNaN(d.getTime())) {
+            return 'Invalid Date';
+        }
+        // Adjust for potential timezone issues if dates look off by one day
+        // const adjustedDate = new Date(d.valueOf() + d.getTimezoneOffset() * 60000);
+        return d.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
-            day: 'numeric'
+            day: 'numeric',
+            timeZone: 'UTC' // Specify timezone to avoid local shifts if dates are date-only
         });
     },
 
@@ -31,25 +39,23 @@ const TextileApp = {
         return regex.test(url);
     },
 
-   
-
     // Notification helper
-    showNotification(message) {
+    showNotification(message, isError = false) {
         let alertDiv = document.getElementById('alert-notification');
         if (!alertDiv) {
             alertDiv = document.createElement('div');
             alertDiv.id = 'alert-notification';
-            alertDiv.className = 'alert-notification';
             document.body.appendChild(alertDiv);
         }
         alertDiv.textContent = message;
+        alertDiv.className = isError ? 'alert-notification error' : 'alert-notification'; // Add error class if needed
         alertDiv.style.display = 'block';
         setTimeout(() => {
-            alertDiv.style.display = 'none';
+            if (alertDiv) alertDiv.style.display = 'none';
         }, 4000);
     },
 
-    // PDF Viewer Functionality (Using Google Drive)
+    // PDF Viewer Functionality
     async initPDFViewer() {
         const semesterSelect = document.getElementById('semester');
         const classSelect = document.getElementById('class');
@@ -67,112 +73,62 @@ const TextileApp = {
         const pdfViewer = document.getElementById('pdf-viewer');
         const pdfViewerContainer = document.getElementById('pdf-viewer-container');
 
-        if (!semesterSelect || !classSelect || !newClassInput || !addClassButton || !teacherSelect || 
-            !newTeacherInput || !addTeacherButton || !chapterSelect || !newChapterInput || !addChapterButton || 
+        // Check if all required elements exist on the page
+        if (!semesterSelect || !classSelect || !newClassInput || !addClassButton || !teacherSelect ||
+            !newTeacherInput || !addTeacherButton || !chapterSelect || !newChapterInput || !addChapterButton ||
             !pdfUrlInput || !uploadPdfButton || !pdfList || !pdfViewer || !pdfViewerContainer) {
-            return; // Skip if elements not found (not on this page)
+            // console.log("PDF elements not found, skipping initPDFViewer");
+            return;
         }
 
-        // Load shared data
-        let pdfStructure = await this.fetchSharedData();
-        pdfStructure = pdfStructure.pdfs || {};
-
-        // Helper function to update class dropdown
-        const updateClassDropdown = () => {
-            const semester = semesterSelect.value;
-            classSelect.innerHTML = '<option value="">Select Class</option>';
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            pdfList.innerHTML = '';
-            pdfViewer.style.display = 'none';
-            if (semester && pdfStructure[semester] && pdfStructure[semester].classes) {
-                Object.keys(pdfStructure[semester].classes).forEach(className => {
-                    const option = document.createElement('option');
-                    option.value = className;
-                    option.textContent = className;
-                    classSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update teacher dropdown
-        const updateTeacherDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            pdfList.innerHTML = '';
-            pdfViewer.style.display = 'none';
-            if (semester && selectedClass && pdfStructure[semester] && pdfStructure[semester].classes[selectedClass]) {
-                Object.keys(pdfStructure[semester].classes[selectedClass].teachers).forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher;
-                    option.textContent = teacher;
-                    teacherSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update chapter dropdown and PDF list
-        const updateChapterDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            pdfList.innerHTML = '';
-            pdfViewer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && 
-                pdfStructure[semester] && pdfStructure[semester].classes[selectedClass] && 
-                pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher]) {
-                Object.keys(pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters).forEach(chapter => {
-                    const option = document.createElement('option');
-                    option.value = chapter;
-                    option.textContent = chapter;
-                    chapterSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to display PDFs for the selected chapter
-        const displayPdfs = () => {
+        // Helper function to fetch and display PDFs based on selection
+        const displayPdfs = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             const selectedChapter = chapterSelect.value;
-            pdfList.innerHTML = '';
-            pdfViewer.style.display = 'none';
-            if (
-                semester &&
-                selectedClass &&
-                selectedTeacher &&
-                selectedChapter &&
-                pdfStructure[semester] &&
-                pdfStructure[semester].classes[selectedClass] &&
-                pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher] &&
-                pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter]
-            ) {
-                const pdfs = pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].pdfs || [];
 
-                // Create a table to display PDFs
+            pdfList.innerHTML = ''; // Clear list
+            pdfViewer.style.display = 'none'; // Hide viewer
+
+            // Only fetch if all required fields are selected (adjust as needed)
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
+                // pdfList.innerHTML = '<li>Please select semester, class, teacher, and chapter.</li>';
+                return; // Don't fetch if criteria aren't met
+            }
+
+            // Construct the query string for the API call
+            const queryParams = new URLSearchParams({
+                semester: semester,
+                class: selectedClass,
+                teacher: selectedTeacher,
+                chapter: selectedChapter
+            }).toString();
+
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/pdfs?${queryParams}`);
+                if (!response.ok) {
+                   throw new Error(`HTTP error ${response.status}: ${await response.text()}`);
+                }
+                const pdfs = await response.json();
+
+                if (pdfs.length === 0) {
+                    pdfList.innerHTML = '<li>No PDFs found for this selection.</li>';
+                    return;
+                }
+
+                // Render the PDF list table
                 const table = document.createElement('table');
                 table.className = 'pdf-table';
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>PDF Name</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                `;
+                table.innerHTML = `<thead><tr><th>PDF Name</th><th>Actions</th></tr></thead><tbody></tbody>`;
                 const tbody = table.querySelector('tbody');
 
                 pdfs.forEach(pdf => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td class="pdf-name">
-                            <i class="fas fa-file-pdf"></i>
-                            <span>${pdf.fileName}</span>
+                            <i class="fas fa-file-pdf" style="margin-right: 5px; color: #D32F2F;"></i> <!-- Added icon style -->
+                            <span>${pdf.file_name || 'Unnamed PDF'}</span>
                         </td>
                         <td>
                             <button class="rename-pdf" data-id="${pdf.id}">Rename</button>
@@ -181,140 +137,84 @@ const TextileApp = {
                     `;
 
                     // Click on PDF name to view
-                    row.querySelector('.pdf-name').addEventListener('click', () => {
-                        pdfViewer.src = pdf.url;
-                        pdfViewer.style.display = 'block';
-                        pdfViewerContainer.scrollIntoView({ behavior: 'smooth' });
-                    });
-
-                    // Rename PDF
-                    row.querySelector('.rename-pdf').addEventListener('click', async () => {
-                        const newName = prompt('Enter new PDF name:', pdf.fileName);
-                        if (newName && newName.trim()) {
-                            pdf.fileName = newName.trim();
-                            const sharedData = await TextileApp.fetchSharedData();
-                            sharedData.pdfs = pdfStructure;
-                            await TextileApp.updateSharedData(sharedData);
-                            displayPdfs();
+                    row.querySelector('.pdf-name span').addEventListener('click', () => {
+                        // Ensure the URL from the DB is the embeddable preview URL
+                        if (pdf.url && pdf.url.includes('/preview')) {
+                             pdfViewer.src = pdf.url;
+                             pdfViewer.style.display = 'block';
+                             pdfViewerContainer.scrollIntoView({ behavior: 'smooth' });
+                        } else {
+                            console.warn("PDF URL might not be an embeddable preview URL:", pdf.url);
+                            // Optionally try to construct it or show an error/link
+                             this.showNotification("Cannot display PDF directly. URL might be incorrect.", true);
+                             // Maybe provide a direct link instead?
+                             // pdfList.insertAdjacentHTML('afterbegin', `<li><a href="${pdf.url}" target="_blank">Open PDF in new tab</a></li>`);
                         }
                     });
 
-                    // Delete PDF
-                    row.querySelector('.delete-pdf').addEventListener('click', async () => {
-                        const updatedPdfs = pdfs.filter(p => p.id !== pdf.id);
-                        pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].pdfs = updatedPdfs;
-                        const sharedData = await TextileApp.fetchSharedData();
-                        sharedData.pdfs = pdfStructure;
-                        await TextileApp.updateSharedData(sharedData);
-                        displayPdfs();
+                    // Rename PDF (Calls PUT API)
+                    row.querySelector('.rename-pdf').addEventListener('click', async () => {
+                        const pdfId = pdf.id;
+                        const currentName = pdf.file_name;
+                        const newName = prompt('Enter new PDF name:', currentName);
+
+                        if (newName && newName.trim() && newName.trim() !== currentName) {
+                            try {
+                                const updateResponse = await fetch(`${this.API_BASE_URL}/pdfs/${pdfId}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ fileName: newName.trim() })
+                                });
+                                if (!updateResponse.ok) throw new Error('Failed to rename PDF');
+                                const updatedPdf = await updateResponse.json();
+                                row.querySelector('.pdf-name span').textContent = updatedPdf.file_name;
+                                this.showNotification('PDF renamed.');
+                            } catch (error) {
+                                console.error('Error renaming PDF:', error);
+                                this.showNotification('Failed to rename PDF.', true);
+                            }
+                        }
                     });
 
+                    // Delete PDF (Calls DELETE API)
+                    row.querySelector('.delete-pdf').addEventListener('click', async () => {
+                        const pdfId = pdf.id;
+                        if (confirm(`Are you sure you want to delete "${pdf.file_name}"?`)) {
+                            try {
+                                const deleteResponse = await fetch(`${this.API_BASE_URL}/pdfs/${pdfId}`, { method: 'DELETE' });
+                                if (!deleteResponse.ok) throw new Error('Failed to delete PDF');
+                                row.remove(); // Remove from UI
+                                this.showNotification('PDF deleted.');
+                            } catch (error) {
+                                console.error('Error deleting PDF:', error);
+                                this.showNotification('Failed to delete PDF.', true);
+                            }
+                        }
+                    });
                     tbody.appendChild(row);
-                });
-
+                }); // end forEach pdf
                 pdfList.appendChild(table);
-            }
-        };
 
-        // Semester change handler
-        semesterSelect.addEventListener('change', () => {
-            updateClassDropdown();
-        });
+            } catch (error) {
+                console.error('Error displaying PDFs:', error);
+                pdfList.innerHTML = '<li>Error loading PDFs. Please try again later.</li>';
+                this.showNotification(`Failed to load PDFs: ${error.message}`, true);
+            }
+        }; // end displayPdfs
 
-        // Class change handler
-        classSelect.addEventListener('change', () => {
-            updateTeacherDropdown();
-        });
+        // Add event listeners to dropdowns to trigger fetching PDFs
+        semesterSelect.addEventListener('change', displayPdfs);
+        classSelect.addEventListener('change', displayPdfs);
+        teacherSelect.addEventListener('change', displayPdfs);
+        chapterSelect.addEventListener('change', displayPdfs);
 
-        // Teacher change handler
-        teacherSelect.addEventListener('change', () => {
-            updateChapterDropdown();
-        });
+        // --- Placeholder Add Functionality ---
+        // TODO: Implement API endpoints and fetch calls for adding these if needed
+        addClassButton.addEventListener('click', () => alert('Add Class functionality requires backend API endpoint.'));
+        addTeacherButton.addEventListener('click', () => alert('Add Teacher functionality requires backend API endpoint.'));
+        addChapterButton.addEventListener('click', () => alert('Add Chapter functionality requires backend API endpoint.'));
 
-        // Chapter change handler
-        chapterSelect.addEventListener('change', () => {
-            displayPdfs();
-        });
-
-        // Add new class
-        addClassButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const newClass = newClassInput.value.trim();
-            if (!semester) {
-                alert('Please select a semester first.');
-                return;
-            }
-            if (!newClass) {
-                alert('Please enter a class name.');
-                return;
-            }
-            if (!pdfStructure[semester]) {
-                pdfStructure[semester] = { classes: {} };
-            }
-            if (!pdfStructure[semester].classes[newClass]) {
-                pdfStructure[semester].classes[newClass] = { teachers: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.pdfs = pdfStructure;
-                await this.updateSharedData(sharedData);
-                updateClassDropdown();
-                newClassInput.value = '';
-            } else {
-                alert('Class already exists.');
-            }
-        });
-
-        // Add new teacher
-        addTeacherButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const newTeacher = newTeacherInput.value.trim();
-            if (!semester || !selectedClass) {
-                alert('Please select a semester and class first.');
-                return;
-            }
-            if (!newTeacher) {
-                alert('Please enter a teacher name.');
-                return;
-            }
-            if (!pdfStructure[semester].classes[selectedClass].teachers[newTeacher]) {
-                pdfStructure[semester].classes[selectedClass].teachers[newTeacher] = { chapters: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.pdfs = pdfStructure;
-                await this.updateSharedData(sharedData);
-                updateTeacherDropdown();
-                newTeacherInput.value = '';
-            } else {
-                alert('Teacher already exists.');
-            }
-        });
-
-        // Add new chapter
-        addChapterButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const newChapter = newChapterInput.value.trim();
-            if (!semester || !selectedClass || !selectedTeacher) {
-                alert('Please select a semester, class, and teacher first.');
-                return;
-            }
-            if (!newChapter) {
-                alert('Please enter a chapter name.');
-                return;
-            }
-            if (!pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter]) {
-                pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter] = { pdfs: [] };
-                const sharedData = await this.fetchSharedData();
-                sharedData.pdfs = pdfStructure;
-                await this.updateSharedData(sharedData);
-                updateChapterDropdown();
-                newChapterInput.value = '';
-            } else {
-                alert('Chapter already exists.');
-            }
-        });
-
-        // Upload PDF
+        // Upload PDF (Calls POST API)
         uploadPdfButton.addEventListener('click', async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
@@ -322,259 +222,164 @@ const TextileApp = {
             const selectedChapter = chapterSelect.value;
             const pdfUrl = pdfUrlInput.value.trim();
 
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
-                alert('Please select a semester, class, teacher, and chapter first.');
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !pdfUrl) {
+                alert('Please select semester, class, teacher, chapter, and enter a PDF URL.');
                 return;
             }
             if (!this.validateGoogleDriveUrl(pdfUrl)) {
-                alert('Please enter a valid Google Drive PDF URL (e.g., https://drive.google.com/file/d/FILE_ID/view).');
+                alert('Please enter a valid Google Drive file URL (e.g., https://drive.google.com/file/d/FILE_ID/view...).');
                 return;
             }
 
-            const fileId = pdfUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)[1];
-            const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+            const fileIdMatch = pdfUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (!fileIdMatch) {
+                alert('Could not extract File ID from Google Drive URL.');
+                return;
+            }
+            const fileId = fileIdMatch[1];
+            const embedUrl = `https://drive.google.com/file/d/${fileId}/preview`; // Use preview URL for iframe
+            const suggestedFileName = `PDF_${fileId}.pdf`; // Default name
+
+            // Ask user for a filename?
+            const userFileName = prompt("Enter a filename for this PDF (optional):", suggestedFileName);
+             const finalFileName = (userFileName && userFileName.trim()) ? userFileName.trim() : suggestedFileName;
+
+
             const pdfData = {
-                id: Date.now().toString(),
-                url: embedUrl,
-                fileName: `PDF_${fileId}.pdf`
+                fileName: finalFileName,
+                url: embedUrl, // Store the embed URL
+                semester: parseInt(semester, 10),
+                className: selectedClass,
+                teacherName: selectedTeacher,
+                chapterName: selectedChapter
             };
 
-            pdfStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].pdfs.push(pdfData);
-            const sharedData = await this.fetchSharedData();
-            sharedData.pdfs = pdfStructure;
-            await this.updateSharedData(sharedData);
-            displayPdfs();
-            pdfUrlInput.value = '';
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/pdfs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pdfData)
+                });
+                if (!response.ok) throw new Error(`Failed to add PDF entry: ${await response.text()}`);
+
+                this.showNotification('PDF entry added.');
+                pdfUrlInput.value = '';
+                await displayPdfs(); // Refresh the list
+
+            } catch (error) {
+                console.error('Error adding PDF:', error);
+                this.showNotification(`Failed to add PDF entry: ${error.message}`, true);
+            }
         });
 
-        // Initial load
-        updateClassDropdown();
+        // Initial population (optional - might fetch common values for dropdowns here)
+        // For now, PDFs load when dropdowns change.
+        // updateClassDropdown(); // This relied on old structure, remove or replace with API call if needed
     },
 
     // Video Integration Functionality
     async initVideoIntegration() {
-        const semesterSelect = document.getElementById('semester-video');
-        const classSelect = document.getElementById('class-video');
-        const newClassInput = document.getElementById('new-class-video');
-        const addClassButton = document.getElementById('add-class-video');
-        const teacherSelect = document.getElementById('teacher-video');
-        const newTeacherInput = document.getElementById('new-teacher-video');
-        const addTeacherButton = document.getElementById('add-teacher-video');
-        const chapterSelect = document.getElementById('chapter-video');
-        const newChapterInput = document.getElementById('new-chapter-video');
-        const addChapterButton = document.getElementById('add-chapter-video');
-        const videoUrlInput = document.getElementById('video-url');
-        const addVideoButton = document.getElementById('add-video-button');
-        const videoList = document.getElementById('video-list');
-        const videoPlayer = document.getElementById('video-player');
-        const videoPlayerContainer = document.getElementById('video-player-container');
+         const semesterSelect = document.getElementById('semester-video');
+         const classSelect = document.getElementById('class-video');
+         // ... (get all other video section elements) ...
+         const videoUrlInput = document.getElementById('video-url');
+         const addVideoButton = document.getElementById('add-video-button');
+         const videoList = document.getElementById('video-list');
+         const videoPlayer = document.getElementById('video-player');
+         const videoPlayerContainer = document.getElementById('video-player-container');
 
-        if (!semesterSelect || !classSelect || !newClassInput || !addClassButton || !teacherSelect || 
-            !newTeacherInput || !addTeacherButton || !chapterSelect || !newChapterInput || !addChapterButton || 
-            !videoUrlInput || !addVideoButton || !videoList || !videoPlayer || !videoPlayerContainer) {
-            return; // Skip if elements not found (not on this page)
-        }
+         if (!semesterSelect || !classSelect /*... add checks for all other elements ...*/ || !videoList || !videoPlayer) {
+             // console.log("Video elements not found, skipping initVideoIntegration");
+             return;
+         }
 
-        // Load shared data
-        let videoStructure = await this.fetchSharedData();
-        videoStructure = videoStructure.videos || {};
-
-        // Helper function to update class dropdown
-        const updateClassDropdown = () => {
-            const semester = semesterSelect.value;
-            classSelect.innerHTML = '<option value="">Select Class</option>';
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-            if (semester && videoStructure[semester] && videoStructure[semester].classes) {
-                Object.keys(videoStructure[semester].classes).forEach(className => {
-                    const option = document.createElement('option');
-                    option.value = className;
-                    option.textContent = className;
-                    classSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update teacher dropdown
-        const updateTeacherDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-            if (semester && selectedClass && videoStructure[semester] && videoStructure[semester].classes[selectedClass]) {
-                Object.keys(videoStructure[semester].classes[selectedClass].teachers).forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher;
-                    option.textContent = teacher;
-                    teacherSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update chapter dropdown and video list
-        const updateChapterDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && 
-                videoStructure[semester] && videoStructure[semester].classes[selectedClass] && 
-                videoStructure[semester].classes[selectedClass].teachers[selectedTeacher]) {
-                Object.keys(videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters).forEach(chapter => {
-                    const option = document.createElement('option');
-                    option.value = chapter;
-                    option.textContent = chapter;
-                    chapterSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to display videos for the selected chapter
-        const displayVideos = () => {
+        const displayVideos = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             const selectedChapter = chapterSelect.value;
+
             videoList.innerHTML = '';
-            videoPlayer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && selectedChapter && 
-                videoStructure[semester] && videoStructure[semester].classes[selectedClass] && 
-                videoStructure[semester].classes[selectedClass].teachers[selectedTeacher] && 
-                videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter]) {
-                const videos = videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].videos || [];
+            if (videoPlayer) videoPlayer.style.display = 'none';
+
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
+                return;
+            }
+
+            const queryParams = new URLSearchParams({
+                semester: semester,
+                class: selectedClass,
+                teacher: selectedTeacher,
+                chapter: selectedChapter
+            }).toString();
+
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/videos?${queryParams}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                const videos = await response.json();
+
+                if (videos.length === 0) {
+                    videoList.innerHTML = '<li>No videos found for this selection.</li>';
+                    return;
+                }
+
                 videos.forEach(video => {
                     const videoItem = document.createElement('div');
                     videoItem.className = 'video-item';
+                    // Assuming video object from API has 'id' and 'video_id' (YouTube ID)
                     videoItem.innerHTML = `
-                        <i class="fas fa-video"></i>
-                        <span>Video_${video.videoId}</span>
-                        <button class="delete-video" data-id="${video.id}">Delete</button>
+                        <i class="fas fa-video" style="margin-right: 5px; color: #1976D2;"></i>
+                        <span>Video ${video.video_id}</span>
+                        <button class="delete-video" data-id="${video.id}" style="margin-left: auto; background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Del</button>
                     `;
+
+                    // Click to play video
                     videoItem.addEventListener('click', (e) => {
-                        if (e.target.className !== 'delete-video') {
-                            videoPlayer.src = `https://www.youtube.com/embed/${video.videoId}`;
+                        if (!e.target.classList.contains('delete-video')) {
+                            videoPlayer.src = `https://www.youtube.com/embed/${video.video_id}`;
                             videoPlayer.style.display = 'block';
-                            videoPlayerContainer.scrollIntoView({ behavior: 'smooth' });
+                            videoPlayerContainer?.scrollIntoView({ behavior: 'smooth' });
                         }
                     });
-                    videoItem.querySelector('.delete-video').addEventListener('click', async () => {
-                        const updatedVideos = videos.filter(v => v.id !== video.id);
-                        videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].videos = updatedVideos;
-                        const sharedData = await TextileApp.fetchSharedData();
-                        sharedData.videos = videoStructure;
-                        await TextileApp.updateSharedData(sharedData);
-                        displayVideos();
+
+                    // Delete video button
+                    videoItem.querySelector('.delete-video').addEventListener('click', async (e) => {
+                        e.stopPropagation(); // Prevent triggering the play click
+                        const videoEntryId = video.id;
+                        if (confirm(`Are you sure you want to delete video ${video.video_id}?`)) {
+                            try {
+                                const deleteResponse = await fetch(`${this.API_BASE_URL}/videos/${videoEntryId}`, { method: 'DELETE' });
+                                if (!deleteResponse.ok) throw new Error('Failed to delete video');
+                                videoItem.remove();
+                                this.showNotification('Video deleted.');
+                            } catch (error) {
+                                console.error('Error deleting video:', error);
+                                this.showNotification('Failed to delete video.', true);
+                            }
+                        }
                     });
                     videoList.appendChild(videoItem);
                 });
+
+            } catch (error) {
+                console.error('Error displaying videos:', error);
+                videoList.innerHTML = '<li>Error loading videos. Please try again.</li>';
+                this.showNotification(`Failed to load videos: ${error.message}`, true);
             }
         };
 
-        // Semester change handler
-        semesterSelect.addEventListener('change', () => {
-            updateClassDropdown();
-        });
+        // Add event listeners to dropdowns
+        semesterSelect.addEventListener('change', displayVideos);
+        classSelect.addEventListener('change', displayVideos);
+        teacherSelect.addEventListener('change', displayVideos);
+        chapterSelect.addEventListener('change', displayVideos);
 
-        // Class change handler
-        classSelect.addEventListener('change', () => {
-            updateTeacherDropdown();
-        });
+        // --- Placeholder Add Functionality ---
+        document.getElementById('add-class-video')?.addEventListener('click', () => alert('Add Class requires backend API.'));
+        document.getElementById('add-teacher-video')?.addEventListener('click', () => alert('Add Teacher requires backend API.'));
+        document.getElementById('add-chapter-video')?.addEventListener('click', () => alert('Add Chapter requires backend API.'));
 
-        // Teacher change handler
-        teacherSelect.addEventListener('change', () => {
-            updateChapterDropdown();
-        });
-
-        // Chapter change handler
-        chapterSelect.addEventListener('change', () => {
-            displayVideos();
-        });
-
-        // Add new class
-        addClassButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const newClass = newClassInput.value.trim();
-            if (!semester) {
-                alert('Please select a semester first.');
-                return;
-            }
-            if (!newClass) {
-                alert('Please enter a class name.');
-                return;
-            }
-            if (!videoStructure[semester]) {
-                videoStructure[semester] = { classes: {} };
-            }
-            if (!videoStructure[semester].classes[newClass]) {
-                videoStructure[semester].classes[newClass] = { teachers: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.videos = videoStructure;
-                await this.updateSharedData(sharedData);
-                updateClassDropdown();
-                newClassInput.value = '';
-            } else {
-                alert('Class already exists.');
-            }
-        });
-
-        // Add new teacher
-        addTeacherButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const newTeacher = newTeacherInput.value.trim();
-            if (!semester || !selectedClass) {
-                alert('Please select a semester and class first.');
-                return;
-            }
-            if (!newTeacher) {
-                alert('Please enter a teacher name.');
-                return;
-            }
-            if (!videoStructure[semester].classes[selectedClass].teachers[newTeacher]) {
-                videoStructure[semester].classes[selectedClass].teachers[newTeacher] = { chapters: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.videos = videoStructure;
-                await this.updateSharedData(sharedData);
-                updateTeacherDropdown();
-                newTeacherInput.value = '';
-            } else {
-                alert('Teacher already exists.');
-            }
-        });
-
-        // Add new chapter
-        addChapterButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const newChapter = newChapterInput.value.trim();
-            if (!semester || !selectedClass || !selectedTeacher) {
-                alert('Please select a semester, class, and teacher first.');
-                return;
-            }
-            if (!newChapter) {
-                alert('Please enter a chapter name.');
-                return;
-            }
-            if (!videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter]) {
-                videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter] = { videos: [] };
-                const sharedData = await this.fetchSharedData();
-                sharedData.videos = videoStructure;
-                await this.updateSharedData(sharedData);
-                updateChapterDropdown();
-                newChapterInput.value = '';
-            } else {
-                alert('Chapter already exists.');
-            }
-        });
-
-        // Add video
+        // Add Video button
         addVideoButton.addEventListener('click', async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
@@ -582,570 +387,432 @@ const TextileApp = {
             const selectedChapter = chapterSelect.value;
             const videoUrl = videoUrlInput.value.trim();
 
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
-                alert('Please select a semester, class, teacher, and chapter first.');
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !videoUrl) {
+                alert('Please select all fields and enter a YouTube Video URL.');
                 return;
             }
             if (!this.validateYouTubeUrl(videoUrl)) {
-                alert('Please enter a valid YouTube URL (e.g., https://youtu.be/VIDEO_ID).');
+                alert('Please enter a valid YouTube Video URL (e.g., https://youtu.be/VIDEO_ID or full URL).');
                 return;
             }
 
-            const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^"&?\/\s]{11})/)[1];
+            const videoIdMatch = videoUrl.match(/(?:v=|v\/|embed\/|youtu\.be\/|\/user\/[^#]*#([^\/]*?\/)*?p\/a\/u\/\d+\/|(?<=watch\?v=))([^"&?\/\s]{11})/);
+            if (!videoIdMatch || !videoIdMatch[2]){
+                 alert('Could not extract Video ID from URL.');
+                 return;
+            }
+            const videoId = videoIdMatch[2];
+
             const videoData = {
-                id: Date.now().toString(),
-                videoId,
-                semester,
-                class: selectedClass,
-                teacher: selectedTeacher,
-                chapter: selectedChapter
+                videoId: videoId,
+                semester: parseInt(semester, 10),
+                className: selectedClass,
+                teacherName: selectedTeacher,
+                chapterName: selectedChapter
             };
 
-            if (!videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].videos) {
-                videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].videos = [];
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/videos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(videoData)
+                });
+                if (!response.ok) throw new Error(`Failed to add video: ${await response.text()}`);
+                this.showNotification('Video added.');
+                videoUrlInput.value = '';
+                await displayVideos(); // Refresh list
+            } catch (error) {
+                console.error('Error adding video:', error);
+                this.showNotification(`Failed to add video: ${error.message}`, true);
             }
-            videoStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].videos.push(videoData);
-            const sharedData = await this.fetchSharedData();
-            sharedData.videos = videoStructure;
-            await this.updateSharedData(sharedData);
-            displayVideos();
-            videoUrlInput.value = '';
         });
-
-        // Initial load
-        updateClassDropdown();
     },
 
     // Notes Functionality
     async initNotes() {
         const semesterSelect = document.getElementById('semester-notes');
         const classSelect = document.getElementById('class-notes');
-        const newClassInput = document.getElementById('new-class-notes');
-        const addClassButton = document.getElementById('add-class-notes');
-        const teacherSelect = document.getElementById('teacher-notes');
-        const newTeacherInput = document.getElementById('new-teacher-notes');
-        const addTeacherButton = document.getElementById('add-teacher-notes');
-        const chapterSelect = document.getElementById('chapter-notes');
-        const newChapterInput = document.getElementById('new-chapter-notes');
-        const addChapterButton = document.getElementById('add-chapter-notes');
-        const studentSelect = document.getElementById('student-name-notes');
-        const newStudentInput = document.getElementById('new-student-name-notes');
-        const addStudentButton = document.getElementById('add-student-name-notes');
+        // ... (get all other notes elements) ...
         const rollSelect = document.getElementById('roll-number-notes');
-        const newRollInput = document.getElementById('new-roll-number-notes');
-        const addRollButton = document.getElementById('add-roll-number-notes');
         const notesContentInput = document.getElementById('notes-content');
         const uploadNotesButton = document.getElementById('upload-notes');
         const notesList = document.getElementById('notes-list');
         const notesViewer = document.getElementById('notes-viewer');
         const notesViewerContainer = document.getElementById('notes-viewer-container');
 
-        if (!semesterSelect || !classSelect || !newClassInput || !addClassButton || !teacherSelect || 
-            !newTeacherInput || !addTeacherButton || !chapterSelect || !newChapterInput || !addChapterButton || 
-            !studentSelect || !newStudentInput || !addStudentButton || !rollSelect || !newRollInput || 
-            !addRollButton || !notesContentInput || !uploadNotesButton || !notesList || !notesViewer || 
-            !notesViewerContainer) {
-            return; // Skip if elements not found (not on this page)
+        if (!semesterSelect || !classSelect /*... add checks for all other elements ...*/ || !notesList || !notesViewer) {
+            // console.log("Notes elements not found, skipping initNotes");
+            return;
         }
 
-        // Load shared data
-        let notesStructure = await this.fetchSharedData();
-        notesStructure = notesStructure.notes || {};
-
-        // Helper function to update class dropdown
-        const updateClassDropdown = () => {
-            const semester = semesterSelect.value;
-            classSelect.innerHTML = '<option value="">Select Class</option>';
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-            rollSelect.innerHTML = '<option value="">Select Roll Number</option>';
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && notesStructure[semester] && notesStructure[semester].classes) {
-                Object.keys(notesStructure[semester].classes).forEach(className => {
-                    const option = document.createElement('option');
-                    option.value = className;
-                    option.textContent = className;
-                    classSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update teacher dropdown
-        const updateTeacherDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            teacherSelect.innerHTML = '<option value="">Select Teacher</option>';
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-            rollSelect.innerHTML = '<option value="">Select Roll Number</option>';
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && selectedClass && notesStructure[semester] && notesStructure[semester].classes[selectedClass]) {
-                Object.keys(notesStructure[semester].classes[selectedClass].teachers).forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher;
-                    option.textContent = teacher;
-                    teacherSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update chapter dropdown
-        const updateChapterDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-            rollSelect.innerHTML = '<option value="">Select Roll Number</option>';
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && 
-                notesStructure[semester] && notesStructure[semester].classes[selectedClass] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher]) {
-                Object.keys(notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters).forEach(chapter => {
-                    const option = document.createElement('option');
-                    option.value = chapter;
-                    option.textContent = chapter;
-                    chapterSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update student dropdown
-        const updateStudentDropdown = () => {
+       const displayNotes = async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
             const selectedTeacher = teacherSelect.value;
             const selectedChapter = chapterSelect.value;
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-            rollSelect.innerHTML = '<option value="">Select Roll Number</option>';
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && selectedChapter && 
-                notesStructure[semester] && notesStructure[semester].classes[selectedClass] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter]) {
-                const students = notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students || {};
-                Object.keys(students).forEach(student => {
-                    const option = document.createElement('option');
-                    option.value = student;
-                    option.textContent = student;
-                    studentSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to update roll number dropdown
-        const updateRollDropdown = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const selectedStudent = studentSelect.value;
-            rollSelect.innerHTML = '<option value="">Select Roll Number</option>';
-            notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && selectedChapter && selectedStudent && 
-                notesStructure[semester] && notesStructure[semester].classes[selectedClass] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent]) {
-                const rolls = notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls || {};
-                Object.keys(rolls).forEach(roll => {
-                    const option = document.createElement('option');
-                    option.value = roll;
-                    option.textContent = roll;
-                    rollSelect.appendChild(option);
-                });
-            }
-        };
-
-        // Helper function to display notes for the selected roll number
-        const displayNotes = () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const selectedStudent = studentSelect.value;
+            const selectedStudent = document.getElementById('student-name-notes').value;
             const selectedRoll = rollSelect.value;
+
             notesList.innerHTML = '';
-            notesViewer.style.display = 'none';
-            if (semester && selectedClass && selectedTeacher && selectedChapter && selectedStudent && selectedRoll && 
-                notesStructure[semester] && notesStructure[semester].classes[selectedClass] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent] && 
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll]) {
-                const notes = notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll].notes || [];
+            if(notesViewer) notesViewer.style.display = 'none';
+
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !selectedStudent || !selectedRoll) {
+                return; // Don't fetch if criteria missing
+            }
+
+            const queryParams = new URLSearchParams({
+                semester, class: selectedClass, teacher: selectedTeacher, chapter: selectedChapter, student: selectedStudent, roll: selectedRoll
+            }).toString();
+
+             try {
+                const response = await fetch(`${this.API_BASE_URL}/notes?${queryParams}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                const notes = await response.json();
+
+                if (notes.length === 0) {
+                    notesList.innerHTML = '<li>No notes found for this selection.</li>';
+                    return;
+                }
+
                 notes.forEach(note => {
                     const noteItem = document.createElement('div');
                     noteItem.className = 'note-item';
+                    // Use note.id and create a display name/preview
+                    const notePreview = (note.content.length > 50) ? note.content.substring(0, 50) + '...' : note.content;
                     noteItem.innerHTML = `
-                        <i class="fas fa-sticky-note"></i>
-                        <span>Note_${note.id}</span>
-                        <button class="delete-note" data-id="${note.id}">Delete</button>
+                        <i class="fas fa-sticky-note" style="margin-right: 5px; color: #FFC107;"></i>
+                        <span>${notePreview}</span>
+                        <button class="delete-note" data-id="${note.id}" style="margin-left: auto; background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Del</button>
                     `;
+
+                    // Click to view note
                     noteItem.addEventListener('click', (e) => {
-                        if (e.target.className !== 'delete-note') {
+                         if (!e.target.classList.contains('delete-note')) {
                             if (this.validateUrl(note.content)) {
-                                notesViewer.innerHTML = `<a href="${note.content}" target="_blank">Open Notes Link</a>`;
+                                // Maybe open URL notes in new tab?
+                                window.open(note.content.startsWith('http') ? note.content : 'http://' + note.content, '_blank');
+                                // notesViewer.innerHTML = `<a href="${note.content}" target="_blank">Open Notes Link</a>`;
                             } else {
-                                notesViewer.textContent = note.content;
+                                notesViewer.textContent = note.content; // Display text content
+                                notesViewer.style.display = 'block';
+                                notesViewerContainer?.scrollIntoView({ behavior: 'smooth' });
                             }
-                            notesViewer.style.display = 'block';
-                            notesViewerContainer.scrollIntoView({ behavior: 'smooth' });
-                        }
+                         }
                     });
-                    noteItem.querySelector('.delete-note').addEventListener('click', async () => {
-                        const updatedNotes = notes.filter(n => n.id !== note.id);
-                        notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll].notes = updatedNotes;
-                        const sharedData = await TextileApp.fetchSharedData();
-                        sharedData.notes = notesStructure;
-                        await TextileApp.updateSharedData(sharedData);
-                        displayNotes();
+
+                    // Delete note button
+                    noteItem.querySelector('.delete-note').addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const noteId = note.id;
+                        if (confirm(`Are you sure you want to delete this note?`)) {
+                           try {
+                                const deleteResponse = await fetch(`${this.API_BASE_URL}/notes/${noteId}`, { method: 'DELETE' });
+                                if (!deleteResponse.ok) throw new Error('Failed to delete note');
+                                noteItem.remove();
+                                this.showNotification('Note deleted.');
+                            } catch (error) {
+                                console.error('Error deleting note:', error);
+                                this.showNotification('Failed to delete note.', true);
+                            }
+                        }
                     });
                     notesList.appendChild(noteItem);
                 });
-            }
-        };
 
-        // Semester change handler
-        semesterSelect.addEventListener('change', () => {
-            updateClassDropdown();
-        });
+             } catch (error) {
+                 console.error('Error displaying notes:', error);
+                 notesList.innerHTML = '<li>Error loading notes. Please try again.</li>';
+                 this.showNotification(`Failed to load notes: ${error.message}`, true);
+             }
+       };
 
-        // Class change handler
-        classSelect.addEventListener('change', () => {
-            updateTeacherDropdown();
-        });
+        // Add event listeners to all dropdowns
+        semesterSelect.addEventListener('change', displayNotes);
+        classSelect.addEventListener('change', displayNotes);
+        document.getElementById('teacher-notes')?.addEventListener('change', displayNotes);
+        document.getElementById('chapter-notes')?.addEventListener('change', displayNotes);
+        document.getElementById('student-name-notes')?.addEventListener('change', displayNotes);
+        rollSelect.addEventListener('change', displayNotes);
 
-        // Teacher change handler
-        teacherSelect.addEventListener('change', () => {
-            updateChapterDropdown();
-        });
 
-        // Chapter change handler
-        chapterSelect.addEventListener('change', () => {
-            updateStudentDropdown();
-        });
+       // --- Placeholder Add Functionality ---
+       document.getElementById('add-class-notes')?.addEventListener('click', () => alert('Add Class requires backend API.'));
+       document.getElementById('add-teacher-notes')?.addEventListener('click', () => alert('Add Teacher requires backend API.'));
+       document.getElementById('add-chapter-notes')?.addEventListener('click', () => alert('Add Chapter requires backend API.'));
+       document.getElementById('add-student-name-notes')?.addEventListener('click', () => alert('Add Student requires backend API.'));
+       document.getElementById('add-roll-number-notes')?.addEventListener('click', () => alert('Add Roll requires backend API.'));
 
-        // Student change handler
-        studentSelect.addEventListener('change', () => {
-            updateRollDropdown();
-        });
 
-        // Roll number change handler
-        rollSelect.addEventListener('change', () => {
-            displayNotes();
-        });
-
-        // Add new class
-        addClassButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const newClass = newClassInput.value.trim();
-            if (!semester) {
-                alert('Please select a semester first.');
-                return;
-            }
-            if (!newClass) {
-                alert('Please enter a class name.');
-                return;
-            }
-            if (!notesStructure[semester]) {
-                notesStructure[semester] = { classes: {} };
-            }
-            if (!notesStructure[semester].classes[newClass]) {
-                notesStructure[semester].classes[newClass] = { teachers: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.notes = notesStructure;
-                await this.updateSharedData(sharedData);
-                updateClassDropdown();
-                newClassInput.value = '';
-            } else {
-                alert('Class already exists.');
-            }
-        });
-
-        // Add new teacher
-        addTeacherButton.addEventListener('click', async () => {
+       // Upload notes button
+       uploadNotesButton.addEventListener('click', async () => {
             const semester = semesterSelect.value;
             const selectedClass = classSelect.value;
-            const newTeacher = newTeacherInput.value.trim();
-            if (!semester || !selectedClass) {
-                alert('Please select a semester and class first.');
-                return;
-            }
-            if (!newTeacher) {
-                alert('Please enter a teacher name.');
-                return;
-            }
-            if (!notesStructure[semester].classes[selectedClass].teachers[newTeacher]) {
-                notesStructure[semester].classes[selectedClass].teachers[newTeacher] = { chapters: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.notes = notesStructure;
-                await this.updateSharedData(sharedData);
-                updateTeacherDropdown();
-                newTeacherInput.value = '';
-            } else {
-                alert('Teacher already exists.');
-            }
-        });
-
-        // Add new chapter
-        addChapterButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const newChapter = newChapterInput.value.trim();
-            if (!semester || !selectedClass || !selectedTeacher) {
-                alert('Please select a semester, class, and teacher first.');
-                return;
-            }
-            if (!newChapter) {
-                alert('Please enter a chapter name.');
-                return;
-            }
-            if (!notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter]) {
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[newChapter] = { students: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.notes = notesStructure;
-                await this.updateSharedData(sharedData);
-                updateChapterDropdown();
-                newChapterInput.value = '';
-            } else {
-                alert('Chapter already exists.');
-            }
-        });
-
-        // Add new student
-        addStudentButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const newStudent = newStudentInput.value.trim();
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter) {
-                alert('Please select a semester, class, teacher, and chapter first.');
-                return;
-            }
-            if (!newStudent) {
-                alert('Please enter a student name.');
-                return;
-            }
-            if (!notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[newStudent]) {
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[newStudent] = { rolls: {} };
-                const sharedData = await this.fetchSharedData();
-                sharedData.notes = notesStructure;
-                await this.updateSharedData(sharedData);
-                updateStudentDropdown();
-                newStudentInput.value = '';
-            } else {
-                alert('Student already exists.');
-            }
-        });
-
-        // Add new roll number
-        addRollButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const selectedStudent = studentSelect.value;
-            const newRoll = newRollInput.value.trim();
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !selectedStudent) {
-                alert('Please select a semester, class, teacher, chapter, and student first.');
-                return;
-            }
-            if (!newRoll) {
-                alert('Please enter a roll number.');
-                return;
-            }
-            if (!notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[newRoll]) {
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[newRoll] = { notes: [] };
-                const sharedData = await this.fetchSharedData();
-                sharedData.notes = notesStructure;
-                await this.updateSharedData(sharedData);
-                updateRollDropdown();
-                newRollInput.value = '';
-            } else {
-                alert('Roll number already exists.');
-            }
-        });
-
-        // Upload notes
-        uploadNotesButton.addEventListener('click', async () => {
-            const semester = semesterSelect.value;
-            const selectedClass = classSelect.value;
-            const selectedTeacher = teacherSelect.value;
-            const selectedChapter = chapterSelect.value;
-            const selectedStudent = studentSelect.value;
+            const selectedTeacher = document.getElementById('teacher-notes').value;
+            const selectedChapter = document.getElementById('chapter-notes').value;
+            const selectedStudent = document.getElementById('student-name-notes').value;
             const selectedRoll = rollSelect.value;
             const notesContent = notesContentInput.value.trim();
 
-            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !selectedStudent || !selectedRoll) {
-                alert('Please select a semester, class, teacher, chapter, student, and roll number first.');
-                return;
-            }
-            if (!notesContent) {
-                alert('Please enter notes content or a URL.');
+            if (!semester || !selectedClass || !selectedTeacher || !selectedChapter || !selectedStudent || !selectedRoll || !notesContent) {
+                alert('Please select all fields and enter note content.');
                 return;
             }
 
             const noteData = {
-                id: Date.now().toString(),
                 content: notesContent,
-                semester,
-                class: selectedClass,
-                teacher: selectedTeacher,
-                chapter: selectedChapter,
-                student: selectedStudent,
-                roll: selectedRoll
+                semester: parseInt(semester, 10),
+                className: selectedClass,
+                teacherName: selectedTeacher,
+                chapterName: selectedChapter,
+                studentName: selectedStudent,
+                rollNumber: selectedRoll
             };
 
-            if (!notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll].notes) {
-                notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll].notes = [];
+             try {
+                const response = await fetch(`${this.API_BASE_URL}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noteData)
+                });
+                if (!response.ok) throw new Error(`Failed to upload note: ${await response.text()}`);
+                this.showNotification('Note uploaded.');
+                notesContentInput.value = '';
+                await displayNotes(); // Refresh list
+            } catch (error) {
+                console.error('Error uploading note:', error);
+                this.showNotification(`Failed to upload note: ${error.message}`, true);
             }
-            notesStructure[semester].classes[selectedClass].teachers[selectedTeacher].chapters[selectedChapter].students[selectedStudent].rolls[selectedRoll].notes.push(noteData);
-            const sharedData = await this.fetchSharedData();
-            sharedData.notes = notesStructure;
-            await this.updateSharedData(sharedData);
-            displayNotes();
-            notesContentInput.value = '';
-        });
-
-        // Initial load
-        updateClassDropdown();
+       });
     },
 
     // Calendar Functionality
     async initCalendar() {
         const calendarEl = document.getElementById('calendar');
-        if (!calendarEl) {
-            return; // Skip if element not found (not on this page)
+        if (!calendarEl || typeof FullCalendar === 'undefined') {
+             // console.log("Calendar element or FullCalendar library not found, skipping initCalendar");
+            return;
         }
 
-        const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridWeek',
-            events: (await this.fetchSharedData()).calendarEvents || [],
-            editable: true,
-            selectable: true,
-            select: async function(info) {
+        let calendarInstance = null; // Hold the calendar instance
+
+        const fetchCalendarEvents = async () => {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/calendarEvents`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                const events = await response.json();
+                // Map DB fields to FullCalendar fields if necessary (e.g., start_time -> start)
+                return events.map(event => ({
+                    id: event.id, // Use DB id
+                    title: event.title,
+                    start: event.start_time,
+                    end: event.end_time, // Might be null
+                    allDay: event.all_day,
+                    extendedProps: { completed: event.completed } // Store custom props here
+                }));
+            } catch (error) {
+                console.error("Error fetching calendar events:", error);
+                this.showNotification("Failed to load calendar events.", true);
+                return [];
+            }
+        };
+
+        calendarInstance = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth', // Changed default view
+            headerToolbar: { // Added header toolbar for navigation
+                 left: 'prev,next today',
+                 center: 'title',
+                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: await fetchCalendarEvents(), // Load events initially
+            editable: true, // Allow drag/drop/resize
+            selectable: true, // Allow clicking/dragging to select dates/times
+
+            // Add New Event
+            select: async (info) => {
                 const title = prompt('Enter event title:');
                 if (title) {
-                    const event = {
+                    const newEventData = {
                         title,
                         start: info.startStr,
                         end: info.endStr,
                         allDay: info.allDay,
                         completed: false
                     };
-                    calendar.addEvent(event);
-                    const sharedData = await TextileApp.fetchSharedData();
-                    sharedData.calendarEvents.push(event);
-                    await TextileApp.updateSharedData(sharedData);
+                     try {
+                         const response = await fetch(`${this.API_BASE_URL}/calendarEvents`, {
+                             method: 'POST',
+                             headers: { 'Content-Type': 'application/json' },
+                             body: JSON.stringify(newEventData)
+                         });
+                         if (!response.ok) throw new Error('Failed to add event');
+                         const createdEvent = await response.json();
+                         // Add event to calendar UI (map fields if needed)
+                         calendarInstance.addEvent({
+                             id: createdEvent.id,
+                             title: createdEvent.title,
+                             start: createdEvent.start_time,
+                             end: createdEvent.end_time,
+                             allDay: createdEvent.all_day,
+                             extendedProps: { completed: createdEvent.completed }
+                         });
+                         this.showNotification("Event added.");
+                     } catch (error) {
+                         console.error("Error adding calendar event:", error);
+                         this.showNotification("Failed to add event.", true);
+                     }
+                }
+                calendarInstance.unselect(); // Unselect the date range
+            },
+
+            // Update Event (Drag/Drop/Resize)
+            eventChange: async (changeInfo) => { // Use eventChange for drop/resize
+                 const event = changeInfo.event;
+                 const eventData = {
+                    title: event.title, // Title might not change on drop/resize
+                    start: event.startStr,
+                    end: event.endStr,
+                    allDay: event.allDay
+                    // We don't update 'completed' status here
+                 };
+                try {
+                    const response = await fetch(`${this.API_BASE_URL}/calendarEvents/${event.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(eventData)
+                    });
+                    if (!response.ok) {
+                        changeInfo.revert(); // Revert change in UI on error
+                        throw new Error('Failed to update event time/date');
+                    }
+                     this.showNotification("Event updated.");
+                } catch (error) {
+                     console.error("Error updating calendar event time/date:", error);
+                     this.showNotification("Failed to update event.", true);
+                     changeInfo.revert();
                 }
             },
-            eventDrop: async function(info) {
-                const sharedData = await TextileApp.fetchSharedData();
-                const updatedEvents = sharedData.calendarEvents.map(event => 
-                    event.start === info.oldEvent.startStr ? {
-                        ...event,
-                        start: info.event.startStr,
-                        end: info.event.endStr
-                    } : event
-                );
-                sharedData.calendarEvents = updatedEvents;
-                await TextileApp.updateSharedData(sharedData);
-            },
-            eventContent: function(arg) {
-                const event = arg.event;
-                const wrapper = document.createElement('div');
-                wrapper.className = 'calendar-event';
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = event.extendedProps.completed || false;
-                checkbox.className = 'task-completed';
-                checkbox.addEventListener('change', async () => {
-                    const sharedData = await TextileApp.fetchSharedData();
-                    const updatedEvents = sharedData.calendarEvents.map(ev => 
-                        ev.start === event.startStr && ev.title === event.title ? {
-                            ...ev,
-                            completed: checkbox.checked
-                        } : ev
-                    );
-                    sharedData.calendarEvents = updatedEvents;
-                    await TextileApp.updateSharedData(sharedData);
-                    event.setExtendedProp('completed', checkbox.checked);
-                    wrapper.querySelector('.event-title').style.textDecoration = checkbox.checked ? 'line-through' : 'none';
-                });
 
-                const title = document.createElement('span');
-                title.className = 'event-title';
-                title.innerText = event.title;
-                title.style.textDecoration = event.extendedProps.completed ? 'line-through' : 'none';
+             // Custom Rendering for Edit/Delete/Complete
+             eventContent: (arg) => {
+                 const event = arg.event;
+                 const props = event.extendedProps;
 
-                const buttonsWrapper = document.createElement('div');
-                buttonsWrapper.className = 'event-buttons';
+                 // Create elements
+                 let italicEl = document.createElement('i'); // Event title
+                 let buttonsWrapper = document.createElement('div');
+                 let checkbox = document.createElement('input');
+                 let editButton = document.createElement('button');
+                 let deleteButton = document.createElement('button');
 
-                const editButton = document.createElement('button');
-                editButton.className = 'edit-task';
-                editButton.innerText = 'Edit';
-                editButton.addEventListener('click', async () => {
-                    const newTitle = prompt('Edit event title:', event.title);
-                    if (newTitle) {
-                        const sharedData = await TextileApp.fetchSharedData();
-                        const updatedEvents = sharedData.calendarEvents.map(ev => 
-                            ev.start === event.startStr && ev.title === event.title ? {
-                                ...ev,
-                                title: newTitle
-                            } : ev
-                        );
-                        sharedData.calendarEvents = updatedEvents;
-                        await TextileApp.updateSharedData(sharedData);
-                        event.setProp('title', newTitle);
-                    }
-                });
+                 // Event Title
+                 italicEl.innerText = event.title;
+                 if (props.completed) {
+                     italicEl.style.textDecoration = 'line-through';
+                     italicEl.style.opacity = '0.7';
+                 }
 
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'delete-task';
-                deleteButton.innerText = 'Delete';
-                deleteButton.addEventListener('click', async () => {
-                    const sharedData = await TextileApp.fetchSharedData();
-                    const updatedEvents = sharedData.calendarEvents.filter(ev => 
-                        !(ev.start === event.startStr && ev.title === event.title)
-                    );
-                    sharedData.calendarEvents = updatedEvents;
-                    await TextileApp.updateSharedData(sharedData);
-                    event.remove();
-                });
+                 // Buttons Wrapper (initially hidden)
+                 buttonsWrapper.className = 'event-buttons-fc'; // Use a unique class
+                 buttonsWrapper.style.display = 'none';
+                 buttonsWrapper.style.marginLeft = '10px'; // Spacing
+                 buttonsWrapper.style.fontSize = '0.8em'; // Smaller buttons
 
-                buttonsWrapper.appendChild(editButton);
-                buttonsWrapper.appendChild(deleteButton);
-                wrapper.appendChild(checkbox);
-                wrapper.appendChild(title);
-                wrapper.appendChild(buttonsWrapper);
+                 // Completed Checkbox
+                 checkbox.type = 'checkbox';
+                 checkbox.checked = props.completed || false;
+                 checkbox.title = 'Mark as completed';
+                 checkbox.addEventListener('change', async () => {
+                     const isCompleted = checkbox.checked;
+                     try {
+                         const response = await fetch(`${this.API_BASE_URL}/calendarEvents/${event.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ completed: isCompleted }) // Only send completed status
+                         });
+                         if (!response.ok) throw new Error('Failed to update completion status');
+                         // Update UI immediately
+                         event.setExtendedProp('completed', isCompleted); // Update internal state
+                         italicEl.style.textDecoration = isCompleted ? 'line-through' : 'none';
+                         italicEl.style.opacity = isCompleted ? '0.7' : '1';
+                         this.showNotification("Event completion status updated.");
+                     } catch (error) {
+                         console.error("Error updating event completion:", error);
+                         this.showNotification("Failed to update completion.", true);
+                         checkbox.checked = !isCompleted; // Revert checkbox on error
+                     }
+                 });
 
-                // Show buttons on hover or click
-                wrapper.addEventListener('mouseenter', () => {
-                    buttonsWrapper.style.display = 'inline-block';
-                });
-                wrapper.addEventListener('mouseleave', () => {
-                    buttonsWrapper.style.display = 'none';
-                });
-                wrapper.addEventListener('click', () => {
-                    buttonsWrapper.style.display = 'inline-block';
-                });
+                 // Edit Button
+                 editButton.innerText = '✎'; // Edit icon
+                 editButton.title = 'Edit title';
+                 editButton.style.cursor = 'pointer';
+                 editButton.style.border = 'none';
+                 editButton.style.background = 'none';
+                 editButton.addEventListener('click', async (e) => {
+                     e.stopPropagation(); // Prevent click on event itself
+                     const newTitle = prompt('Edit event title:', event.title);
+                     if (newTitle && newTitle.trim() && newTitle !== event.title) {
+                        try {
+                             const response = await fetch(`${this.API_BASE_URL}/calendarEvents/${event.id}`, {
+                                 method: 'PUT',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({ title: newTitle.trim() }) // Only send title
+                             });
+                             if (!response.ok) throw new Error('Failed to edit event title');
+                             event.setProp('title', newTitle.trim()); // Update title in calendar
+                             this.showNotification("Event title updated.");
+                         } catch (error) {
+                             console.error("Error editing event title:", error);
+                             this.showNotification("Failed to edit title.", true);
+                         }
+                     }
+                 });
 
-                return { domNodes: [wrapper] };
-            }
+                 // Delete Button
+                 deleteButton.innerText = '🗑️'; // Trash icon
+                 deleteButton.title = 'Delete event';
+                 deleteButton.style.cursor = 'pointer';
+                 deleteButton.style.border = 'none';
+                 deleteButton.style.background = 'none';
+                 deleteButton.style.marginLeft = '5px';
+                 deleteButton.addEventListener('click', async (e) => {
+                     e.stopPropagation();
+                     if (confirm(`Are you sure you want to delete event "${event.title}"?`)) {
+                         try {
+                             const response = await fetch(`${this.API_BASE_URL}/calendarEvents/${event.id}`, { method: 'DELETE' });
+                             if (!response.ok) throw new Error('Failed to delete event');
+                             event.remove(); // Remove from calendar UI
+                             this.showNotification("Event deleted.");
+                         } catch (error) {
+                             console.error("Error deleting calendar event:", error);
+                             this.showNotification("Failed to delete event.", true);
+                         }
+                     }
+                 });
+
+                 // Assemble buttons
+                 buttonsWrapper.appendChild(checkbox);
+                 buttonsWrapper.appendChild(editButton);
+                 buttonsWrapper.appendChild(deleteButton);
+
+                 // Main container for title and buttons
+                 let containerEl = document.createElement('div');
+                 containerEl.style.display = 'flex';
+                 containerEl.style.alignItems = 'center';
+                 containerEl.appendChild(italicEl);
+                 containerEl.appendChild(buttonsWrapper);
+
+                 // Show/Hide buttons on hover
+                 containerEl.addEventListener('mouseenter', () => { buttonsWrapper.style.display = 'inline-flex'; });
+                 containerEl.addEventListener('mouseleave', () => { buttonsWrapper.style.display = 'none'; });
+
+                 return { domNodes: [containerEl] };
+             }
         });
-        calendar.render();
+        calendarInstance.render();
     },
 
-    // Events Functionality
+    // Events Functionality (Separate Events Page)
     async initEvents() {
         const addEventButton = document.getElementById('add-event');
         const eventTitleInput = document.getElementById('event-title');
@@ -1154,150 +821,200 @@ const TextileApp = {
         const eventList = document.getElementById('event-list');
 
         if (!addEventButton || !eventTitleInput || !eventDateInput || !eventDescriptionInput || !eventList) {
-            return; // Skip if elements not found (not on this page)
+            // console.log("Events page elements not found, skipping initEvents");
+            return;
         }
 
-        // Load shared events
-        const sharedData = await this.fetchSharedData();
-        const storedEvents = sharedData.events || [];
-        storedEvents.forEach(event => {
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <strong>${event.title}</strong> - ${this.formatDate(event.date)}<br>
-                ${event.description}
-                <button class="delete-event">Delete</button>
-            `;
-            listItem.querySelector('.delete-event').addEventListener('click', async () => {
-                listItem.remove();
-                const sharedData = await this.fetchSharedData();
-                sharedData.events = sharedData.events.filter(e => e.id !== event.id);
-                await this.updateSharedData(sharedData);
+        const renderEvents = (events) => {
+            eventList.innerHTML = ''; // Clear list
+            if (!events || events.length === 0) {
+                eventList.innerHTML = '<li>No events found.</li>';
+                return;
+            }
+            events.forEach(event => {
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                    <strong>${event.title}</strong> - ${this.formatDate(event.event_date)}<br>
+                    ${event.description || ''}
+                    <button class="delete-event" data-id="${event.id}" style="margin-left: 10px; background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; float: right;">Delete</button>
+                `;
+                listItem.querySelector('.delete-event').addEventListener('click', async () => {
+                    const eventId = event.id;
+                    if(confirm(`Delete event "${event.title}"?`)) {
+                        try {
+                             const response = await fetch(`${this.API_BASE_URL}/events/${eventId}`, { method: 'DELETE'});
+                             if (!response.ok) throw new Error('Failed to delete event');
+                             listItem.remove();
+                             this.showNotification("Event deleted.");
+                         } catch(error) {
+                            console.error("Error deleting event:", error);
+                            this.showNotification("Failed to delete event.", true);
+                         }
+                    }
+                });
+                eventList.appendChild(listItem);
             });
-            eventList.appendChild(listItem);
-        });
+        };
 
+        const fetchAndRenderEvents = async () => {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/events`);
+                if (!response.ok) throw new Error('Failed to load events');
+                const events = await response.json();
+                renderEvents(events);
+            } catch (error) {
+                console.error("Error fetching events:", error);
+                this.showNotification("Could not load events.", true);
+                eventList.innerHTML = '<li>Error loading events.</li>';
+            }
+        };
+
+        // Add event handler
         addEventButton.addEventListener('click', async () => {
-            const title = eventTitleInput.value;
-            const date = eventDateInput.value;
-            const description = eventDescriptionInput.value;
+            const title = eventTitleInput.value.trim();
+            const date = eventDateInput.value; // Should be in YYYY-MM-DD format from input type="date"
+            const description = eventDescriptionInput.value.trim();
 
             if (!title || !date || !description) {
                 alert('Please fill in all event details.');
                 return;
             }
 
-            const event = {
-                id: Date.now().toString(),
-                title,
-                date,
-                description
-            };
+            const eventData = { title, date, description }; // Use field names matching backend
 
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <strong>${title}</strong> - ${this.formatDate(date)}<br>
-                ${description}
-                <button class="delete-event">Delete</button>
-            `;
-            listItem.querySelector('.delete-event').addEventListener('click', async () => {
-                listItem.remove();
-                const sharedData = await this.fetchSharedData();
-                sharedData.events = sharedData.events.filter(e => e.id !== event.id);
-                await this.updateSharedData(sharedData);
-            });
-            eventList.appendChild(listItem);
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(eventData)
+                });
+                if (!response.ok) throw new Error(`Failed to add event: ${await response.text()}`);
 
-            const sharedData = await this.fetchSharedData();
-            if (!sharedData.events) sharedData.events = [];
-            sharedData.events.push(event);
-            await this.updateSharedData(sharedData);
-
-            eventTitleInput.value = '';
-            eventDateInput.value = '';
-            eventDescriptionInput.value = '';
+                this.showNotification("Event added.");
+                // Clear form
+                eventTitleInput.value = '';
+                eventDateInput.value = '';
+                eventDescriptionInput.value = '';
+                // Refresh list
+                await fetchAndRenderEvents();
+            } catch (error) {
+                console.error("Error adding event:", error);
+                this.showNotification(`Failed to add event: ${error.message}`, true);
+            }
         });
+
+        // Initial load
+        fetchAndRenderEvents();
     },
 
     // Exam Routine Functionality
     async initExamRoutine() {
         const addExamButton = document.getElementById('add-exam');
-        const examForm = document.getElementById('exam-form');
+        const examForm = document.getElementById('exam-form'); // Assuming this is the container div
         const saveExamButton = document.getElementById('save-exam');
         const examTableBody = document.querySelector('#exam-table tbody');
+        // Get form inputs
+        const dateInput = document.getElementById('exam-date');
+        const subjectInput = document.getElementById('exam-subject');
+        const timeInput = document.getElementById('exam-time');
+        const roomInput = document.getElementById('exam-room');
 
-        if (!addExamButton || !examForm || !saveExamButton || !examTableBody) {
-            return; // Skip if elements not found (not on this page)
+
+        if (!addExamButton || !examForm || !saveExamButton || !examTableBody || !dateInput || !subjectInput || !timeInput || !roomInput) {
+             // console.log("Exam routine elements not found, skipping initExamRoutine");
+            return;
         }
 
-        // Load shared exams
-        const sharedData = await this.fetchSharedData();
-        const storedExams = sharedData.exams || [];
-        storedExams.forEach(exam => {
-            const newRow = examTableBody.insertRow();
-            newRow.innerHTML = `
-                <td>${this.formatDate(exam.date)}</td>
-                <td>${exam.subject}</td>
-                <td>${exam.time}</td>
-                <td>${exam.room}</td>
-                <td><button class="delete-exam">Delete</button></td>
-            `;
-            newRow.querySelector('.delete-exam').addEventListener('click', async () => {
-                newRow.remove();
-                const sharedData = await this.fetchSharedData();
-                sharedData.exams = sharedData.exams.filter(e => e.id !== exam.id);
-                await this.updateSharedData(sharedData);
-            });
-        });
+        const renderExams = (exams) => {
+             examTableBody.innerHTML = ''; // Clear table body
+             if (!exams || exams.length === 0) {
+                 // Optional: Add a row indicating no exams
+                 examTableBody.innerHTML = '<tr><td colspan="5">No exams scheduled.</td></tr>';
+                 return;
+             }
+             exams.forEach(exam => {
+                 const row = examTableBody.insertRow();
+                 row.innerHTML = `
+                     <td>${this.formatDate(exam.exam_date)}</td>
+                     <td>${exam.subject || ''}</td>
+                     <td>${exam.exam_time || ''}</td>
+                     <td>${exam.room || ''}</td>
+                     <td><button class="delete-exam" data-id="${exam.id}" style="background-color: #F44336; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Delete</button></td>
+                 `;
+                 row.querySelector('.delete-exam').addEventListener('click', async () => {
+                     const examId = exam.id;
+                     if (confirm(`Delete exam "${exam.subject}" on ${this.formatDate(exam.exam_date)}?`)) {
+                        try {
+                            const response = await fetch(`${this.API_BASE_URL}/exams/${examId}`, { method: 'DELETE' });
+                            if (!response.ok) throw new Error('Failed to delete exam');
+                            row.remove();
+                            this.showNotification("Exam deleted.");
+                        } catch(error) {
+                            console.error("Error deleting exam:", error);
+                            this.showNotification("Failed to delete exam.", true);
+                        }
+                     }
+                 });
+             });
+        };
 
+        const fetchAndRenderExams = async () => {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/exams`);
+                 if (!response.ok) throw new Error('Failed to load exams');
+                 const exams = await response.json();
+                 renderExams(exams);
+            } catch(error) {
+                 console.error("Error fetching exams:", error);
+                 this.showNotification("Could not load exams.", true);
+                 examTableBody.innerHTML = '<tr><td colspan="5">Error loading exams.</td></tr>';
+            }
+        };
+
+        // Show/hide form
         addExamButton.addEventListener('click', () => {
-            examForm.style.display = 'block';
+            examForm.style.display = examForm.style.display === 'none' ? 'block' : 'none';
         });
 
+        // Save exam handler
         saveExamButton.addEventListener('click', async () => {
-            const date = document.getElementById('exam-date').value;
-            const subject = document.getElementById('exam-subject').value;
-            const time = document.getElementById('exam-time').value;
-            const room = document.getElementById('exam-room').value;
+            const date = dateInput.value;
+            const subject = subjectInput.value.trim();
+            const time = timeInput.value;
+            const room = roomInput.value.trim();
 
             if (!date || !subject || !time || !room) {
                 alert('Please fill in all exam details.');
                 return;
             }
 
-            const exam = {
-                id: Date.now().toString(),
-                date,
-                subject,
-                time,
-                room
-            };
+            const examData = { date, subject, time, room }; // Match backend fields
 
-            const newRow = examTableBody.insertRow();
-            newRow.innerHTML = `
-                <td>${this.formatDate(date)}</td>
-                <td>${subject}</td>
-                <td>${time}</td>
-                <td>${room}</td>
-                <td><button class="delete-exam">Delete</button></td>
-            `;
-            newRow.querySelector('.delete-exam').addEventListener('click', async () => {
-                newRow.remove();
-                const sharedData = await this.fetchSharedData();
-                sharedData.exams = sharedData.exams.filter(e => e.id !== exam.id);
-                await this.updateSharedData(sharedData);
-            });
+             try {
+                const response = await fetch(`${this.API_BASE_URL}/exams`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(examData)
+                });
+                if (!response.ok) throw new Error(`Failed to add exam: ${await response.text()}`);
 
-            const sharedData = await this.fetchSharedData();
-            if (!sharedData.exams) sharedData.exams = [];
-            sharedData.exams.push(exam);
-            await this.updateSharedData(sharedData);
-
-            examForm.style.display = 'none';
-            document.getElementById('exam-date').value = '';
-            document.getElementById('exam-subject').value = '';
-            document.getElementById('exam-time').value = '';
-            document.getElementById('exam-room').value = '';
+                this.showNotification("Exam added.");
+                // Clear form and hide
+                dateInput.value = '';
+                subjectInput.value = '';
+                timeInput.value = '';
+                roomInput.value = '';
+                examForm.style.display = 'none';
+                // Refresh list
+                await fetchAndRenderExams();
+            } catch (error) {
+                console.error("Error adding exam:", error);
+                this.showNotification(`Failed to add exam: ${error.message}`, true);
+            }
         });
+
+        // Initial load
+        fetchAndRenderExams();
     },
 
     // Task Planner Functionality
@@ -1307,19 +1024,33 @@ const TextileApp = {
         const taskList = document.getElementById('task-list');
 
         if (!newTaskInput || !addTaskButton || !taskList) {
-            return; // Skip if elements not found (not on this page)
+            // console.log("Task planner elements not found, skipping initTaskPlanner");
+            return;
         }
 
-        // Load shared tasks
-        const sharedData = await this.fetchSharedData();
-        const storedTasks = sharedData.tasks || [];
+        const fetchTasks = async () => {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/tasks`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const tasks = await response.json();
+                return tasks;
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+                this.showNotification('Failed to load tasks.', true);
+                return [];
+            }
+        };
 
-        // Helper function to render tasks
-        const renderTasks = () => {
-            taskList.innerHTML = ''; // Clear the list
-            storedTasks.forEach(task => {
+        const renderTasks = (tasks) => {
+            taskList.innerHTML = '';
+            if (!tasks || tasks.length === 0) {
+                 taskList.innerHTML = '<li>No tasks yet!</li>';
+                 return;
+            }
+            tasks.forEach(task => {
                 const listItem = document.createElement('li');
                 listItem.className = 'task-item';
+                listItem.dataset.taskId = task.id; // Store id on the element
                 listItem.innerHTML = `
                     <input type="checkbox" class="task-completed" ${task.completed ? 'checked' : ''}>
                     <span class="task-text" style="text-decoration: ${task.completed ? 'line-through' : 'none'}">${task.text}</span>
@@ -1327,46 +1058,71 @@ const TextileApp = {
                     <button class="delete-task">Delete</button>
                 `;
 
-                // Checkbox handler for marking task as completed
+                // Checkbox handler
                 const checkbox = listItem.querySelector('.task-completed');
                 checkbox.addEventListener('change', async () => {
-                    task.completed = checkbox.checked;
-                    listItem.querySelector('.task-text').style.textDecoration = task.completed ? 'line-through' : 'none';
-                    const sharedData = await TextileApp.fetchSharedData();
-                    sharedData.tasks = storedTasks;
-                    await TextileApp.updateSharedData(sharedData);
+                    const taskId = listItem.dataset.taskId;
+                    const isCompleted = checkbox.checked;
+                    try {
+                        const response = await fetch(`${this.API_BASE_URL}/tasks/${taskId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ completed: isCompleted })
+                        });
+                        if (!response.ok) throw new Error('Failed to update task status');
+                        listItem.querySelector('.task-text').style.textDecoration = isCompleted ? 'line-through' : 'none';
+                        // No notification needed for simple toggle
+                    } catch (error) {
+                        console.error('Error updating task status:', error);
+                        this.showNotification('Failed to update task status.', true);
+                        checkbox.checked = !isCompleted; // Revert UI on error
+                    }
                 });
 
                 // Edit task handler
                 listItem.querySelector('.edit-task').addEventListener('click', async () => {
-                    const newText = prompt('Edit task:', task.text);
-                    if (newText && newText.trim()) {
-                        task.text = newText.trim();
-                        listItem.querySelector('.task-text').textContent = task.text;
-                        listItem.querySelector('.task-text').style.textDecoration = task.completed ? 'line-through' : 'none';
-                        const sharedData = await TextileApp.fetchSharedData();
-                        sharedData.tasks = storedTasks;
-                        await TextileApp.updateSharedData(sharedData);
+                    const taskId = listItem.dataset.taskId;
+                    const spanElement = listItem.querySelector('.task-text');
+                    const currentText = spanElement.textContent;
+                    const newText = prompt('Edit task:', currentText);
+
+                    if (newText && newText.trim() && newText.trim() !== currentText) {
+                       try {
+                            const response = await fetch(`${this.API_BASE_URL}/tasks/${taskId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ text: newText.trim() })
+                            });
+                            if (!response.ok) throw new Error('Failed to edit task');
+                            const updatedTask = await response.json();
+                            spanElement.textContent = updatedTask.text; // Update UI
+                            // this.showNotification('Task edited.'); // Optional notification
+                       } catch (error) {
+                           console.error('Error editing task:', error);
+                           this.showNotification('Failed to edit task.', true);
+                       }
                     }
                 });
 
                 // Delete task handler
                 listItem.querySelector('.delete-task').addEventListener('click', async () => {
-                    listItem.remove();
-                    const updatedTasks = storedTasks.filter(t => t.id !== task.id);
-                    storedTasks.length = 0;
-                    storedTasks.push(...updatedTasks);
-                    const sharedData = await TextileApp.fetchSharedData();
-                    sharedData.tasks = storedTasks;
-                    await TextileApp.updateSharedData(sharedData);
+                    const taskId = listItem.dataset.taskId;
+                    const taskText = listItem.querySelector('.task-text').textContent;
+                    if (confirm(`Are you sure you want to delete task "${taskText}"?`)) {
+                         try {
+                            const response = await fetch(`${this.API_BASE_URL}/tasks/${taskId}`, { method: 'DELETE' });
+                             if (!response.ok) throw new Error('Failed to delete task');
+                             listItem.remove(); // Remove from UI
+                             // this.showNotification('Task deleted.'); // Optional notification
+                         } catch(error) {
+                            console.error('Error deleting task:', error);
+                            this.showNotification(`Failed to delete task: ${error.message}`, true);
+                         }
+                    }
                 });
-
                 taskList.appendChild(listItem);
             });
         };
-
-        // Initial render of tasks
-        renderTasks();
 
         // Add task handler
         addTaskButton.addEventListener('click', async () => {
@@ -1375,64 +1131,99 @@ const TextileApp = {
                 alert('Please enter a task.');
                 return;
             }
-
-            const task = {
-                id: Date.now().toString(),
-                text: taskText,
-                completed: false
-            };
-
-            storedTasks.push(task);
-            const sharedData = await this.fetchSharedData();
-            sharedData.tasks = storedTasks;
-            await this.updateSharedData(sharedData);
-            renderTasks();
-            newTaskInput.value = '';
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: taskText })
+                });
+                 if (!response.ok) throw new Error(`Failed to add task: ${await response.text()}`);
+                 // Refresh the entire list after adding
+                 const updatedTasks = await fetchTasks();
+                 renderTasks(updatedTasks);
+                 newTaskInput.value = ''; // Clear input
+                 // this.showNotification('Task added.'); // Optional
+            } catch (error) {
+                console.error('Error adding task:', error);
+                this.showNotification(`Failed to add task: ${error.message}`, true);
+            }
         });
+
+         // Allow adding tasks with Enter key
+         newTaskInput.addEventListener('keypress', (e) => {
+             if (e.key === 'Enter') {
+                 addTaskButton.click(); // Trigger the add button click
+             }
+         });
+
+        // Initial load of tasks
+        const initialTasks = await fetchTasks();
+        renderTasks(initialTasks);
     },
 
-    // Chat System Functionality (Basic - no backend)
+    // Chat System Functionality (Basic - Fetch/POST only)
     async initChatSystem() {
         const messageInput = document.getElementById('message-input');
         const sendMessageButton = document.getElementById('send-message');
         const chatMessages = document.getElementById('chat-messages');
 
         if (!messageInput || !sendMessageButton || !chatMessages) {
-            return; // Skip if elements not found (not on this page)
+             // console.log("Chat elements not found, skipping initChatSystem");
+            return;
         }
 
-        // Load shared messages
-        const sharedData = await this.fetchSharedData();
-        const storedMessages = sharedData.chatMessages || [];
-        storedMessages.forEach(message => {
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `[${new Date(message.timestamp).toLocaleTimeString()}] ${message.text}`;
-            chatMessages.appendChild(messageElement);
-        });
+         const renderMessages = (messages) => {
+            chatMessages.innerHTML = ''; // Clear messages
+             if (!messages || messages.length === 0) {
+                 chatMessages.innerHTML = '<div>No messages yet.</div>';
+                 return;
+             }
+            messages.forEach(message => {
+                const messageElement = document.createElement('div');
+                // Use created_at from DB if available, otherwise fallback
+                const timestamp = message.created_at ? new Date(message.created_at).toLocaleTimeString() : new Date().toLocaleTimeString();
+                messageElement.textContent = `[${timestamp}] ${message.text}`;
+                chatMessages.appendChild(messageElement);
+            });
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+         };
 
+         const fetchAndRenderMessages = async () => {
+             try {
+                 const response = await fetch(`${this.API_BASE_URL}/chatMessages?limit=100`); // Get last 100
+                 if (!response.ok) throw new Error('Failed to load messages');
+                 const messages = await response.json();
+                 renderMessages(messages);
+             } catch(error) {
+                 console.error("Error fetching chat messages:", error);
+                 this.showNotification("Failed to load chat messages.", true);
+                 chatMessages.innerHTML = '<div>Error loading messages.</div>';
+             }
+         };
+
+         // Send Message Handler
         sendMessageButton.addEventListener('click', async () => {
             const messageText = messageInput.value.trim();
             if (!messageText) {
-                alert('Please enter a message.');
+                // Don't send empty messages
                 return;
             }
 
-            const message = {
-                text: messageText,
-                timestamp: new Date().toISOString()
-            };
-
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${messageText}`;
-            chatMessages.appendChild(messageElement);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            const sharedData = await this.fetchSharedData();
-            if (!sharedData.chatMessages) sharedData.chatMessages = [];
-            sharedData.chatMessages.push(message);
-            await this.updateSharedData(sharedData);
-
-            messageInput.value = '';
+            try {
+                 const response = await fetch(`${this.API_BASE_URL}/chatMessages`, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ text: messageText })
+                 });
+                 if (!response.ok) throw new Error(`Failed to send message: ${await response.text()}`);
+                 messageInput.value = ''; // Clear input
+                 // Refresh messages after sending
+                 await fetchAndRenderMessages();
+            } catch(error) {
+                console.error("Error sending message:", error);
+                this.showNotification(`Failed to send message: ${error.message}`, true);
+            }
         });
 
         // Allow sending messages with Enter key
@@ -1441,6 +1232,12 @@ const TextileApp = {
                 sendMessageButton.click();
             }
         });
+
+        // Initial load
+        fetchAndRenderMessages();
+
+        // Basic polling (optional, inefficient for real chat)
+        // setInterval(fetchAndRenderMessages, 15000); // Refresh every 15 seconds
     },
 
     // Initialize based on the current page
@@ -1448,7 +1245,27 @@ const TextileApp = {
         const path = window.location.pathname;
         const page = path.split('/').pop() || 'index.html';
 
-        if (page === 'pdfs.html') {
+        // Find the header container on the current page, if it exists.
+        const headerContainer = document.querySelector('header.header-container');
+
+        if (headerContainer) {
+             // Load header only if the container is present
+             this.loadHeader().then(() => {
+                 // Initialize page-specific scripts AFTER header is potentially loaded
+                 this.initializePageScript(page);
+             }).catch(error => {
+                 console.error("Failed to load header, proceeding with page script init.", error);
+                 this.initializePageScript(page);
+             });
+        } else {
+            // If no header container, initialize page script directly
+             this.initializePageScript(page);
+        }
+    },
+
+    // Helper function to run page-specific init logic
+    initializePageScript(page) {
+        if (page === 'pdfs.html' || page==='') { // Treat empty path as index/pdf maybe? Adjust as needed
             this.initPDFViewer();
         } else if (page === 'videos.html') {
             this.initVideoIntegration();
@@ -1465,48 +1282,37 @@ const TextileApp = {
         } else if (page === 'chat.html') {
             this.initChatSystem();
         }
-    }
-};
+        // Add other page checks here if needed
+    },
 
-// Function to load header
-TextileApp.loadHeader = function() {
-    const headerElements = document.querySelectorAll('header');
-    if (headerElements.length > 0) {
-        fetch('header.html')
-            .then(response => response.text())
-            .then(data => {
+    // Function to load header (returns a promise)
+    async loadHeader() {
+        // Find header elements again within this function scope
+        const headerElements = document.querySelectorAll('header.header-container:empty'); // Select only empty ones to avoid multiple loads
+        if (headerElements.length > 0) {
+            try {
+                const response = await fetch('header.html');
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                const data = await response.text();
                 headerElements.forEach(header => {
-                    header.outerHTML = data;
+                    // Replace the placeholder's inner content instead of outerHTML
+                    // This assumes header.html contains the CONTENT for the header,
+                    // not the <header> tag itself. Adjust if header.html includes <header> tag.
+                    if (header.innerHTML.trim() === '') { // Only fill if empty
+                         header.innerHTML = data;
+                    }
                 });
-            })
-            .catch(error => console.error('Error loading header:', error));
+            } catch (error) {
+                console.error('Error loading header:', error);
+                // Propagate the error so the caller knows
+                throw error;
+            }
+        }
+        // If no header elements found or needed loading, resolve immediately
+        return Promise.resolve();
     }
-};
 
-// Update init to include header loading
-TextileApp.init = function() {
-    this.loadHeader(); // Load header on every page
-    const path = window.location.pathname;
-    const page = path.split('/').pop() || 'index.html';
-
-    if (page === 'pdfs.html') {
-        this.initPDFViewer();
-    } else if (page === 'videos.html') {
-        this.initVideoIntegration();
-    } else if (page === 'notes.html') {
-        this.initNotes();
-    } else if (page === 'calendar.html') {
-        this.initCalendar();
-    } else if (page === 'events.html') {
-        this.initEvents();
-    } else if (page === 'exam-routine.html') {
-        this.initExamRoutine();
-    } else if (page === 'task-planner.html') {
-        this.initTaskPlanner();
-    } else if (page === 'chat.html') {
-        this.initChatSystem();
-    }
-};
+}; // End TextileApp Object
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {

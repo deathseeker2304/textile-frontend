@@ -273,18 +273,23 @@ const TextileApp = {
         });
 
         // Add Chapter Functionality
-        addChapterButton.addEventListener('click', async () => {
+        addChapterButton.addEventListener('click', async () => { // <-- ADD CHAPTER HANDLER (PDFs)
             const newChapterName = newChapterInput.value.trim();
             if (!newChapterName) {
                 this.showNotification('Please enter a chapter name to add.', true);
                 return;
             }
-
+        
             try {
                 const response = await fetch(`${this.API_BASE_URL}/chapters`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapterName: newChapterName })
+                    body: JSON.stringify({
+                        chapterName: newChapterName,
+                        semester: semesterSelect.value,
+                        className: classSelect.value,
+                        teacherName: teacherSelect.value
+                    })
                 });
                 if (!response.ok && response.status !== 409) {
                     throw new Error(`Failed to add chapter: ${await response.text()}`);
@@ -688,7 +693,12 @@ const TextileApp = {
                 const response = await fetch(`${this.API_BASE_URL}/chapters`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapterName: newChapterName })
+                    body: JSON.stringify({
+                        chapterName: newChapterName,
+                        semester: semesterSelect.value,
+                        className: classSelect.value,
+                        teacherName: teacherSelect.value
+                    })
                 });
                 if (!response.ok && response.status !== 409) {
                     throw new Error(`Failed to add chapter: ${await response.text()}`);
@@ -1121,7 +1131,12 @@ const TextileApp = {
                 const response = await fetch(`${this.API_BASE_URL}/chapters`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chapterName: newChapterName })
+                    body: JSON.stringify({
+                        chapterName: newChapterName,
+                        semester: semesterSelect.value,
+                        className: classSelect.value,
+                        teacherName: teacherSelect.value
+                    })
                 });
                 if (!response.ok && response.status !== 409) {
                     throw new Error(`Failed to add chapter: ${await response.text()}`);
